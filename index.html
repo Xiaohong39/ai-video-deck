@@ -1,0 +1,2541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 视频重构同城商业</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@300;400;500;600&family=Noto+Serif+SC:wght@300;400;500;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* ============ Theme color (default: 🖋 Ink Classic) ============
+       Switch theme: copy the matching :root block from references/themes.md
+       Replace these lines wholesale (--ink / --ink-rgb / --paper / --paper-rgb)
+       The rgba() calls scattered elsewhere all go through var(--ink-rgb) / var(--paper-rgb), no need to change them one by one */
+    --ink:#0a1f3d;
+    --ink-rgb:10,31,61;
+    --paper:#f1f3f5;
+    --paper-rgb:241,243,245;
+    --paper-tint:#e4e8ec;
+    --ink-tint:#152a4a;
+
+    /* ============ Fonts (fixed across themes) ============ */
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --serif-en:"Playfair Display","Source Serif 4",Georgia,serif;
+    --serif-body-en:"Source Serif 4",Georgia,serif;
+    --serif-zh:"Noto Serif SC",source-han-serif-sc,serif;
+    --sans-zh:"Noto Sans SC",source-han-sans-sc,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);font-family:var(--sans-zh);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+  /* ============ WebGL dual background ============ */
+  canvas.bg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;display:block;transition:opacity 1.2s ease}
+  canvas#bg-light{opacity:0}
+  canvas#bg-dark{opacity:1}
+  body.light-bg canvas#bg-light{opacity:1}
+  body.light-bg canvas#bg-dark{opacity:0}
+
+  /* ============ Deck container + navigation ============ */
+  /* width: NSLIDES * 100vw, dynamically corrected in JS */
+  #deck{position:fixed;inset:0;width:10000vw;height:100vh;display:flex;flex-wrap:nowrap;transition:transform .9s cubic-bezier(.77,0,.175,1);z-index:10;will-change:transform}
+  .slide{width:100vw;height:100vh;flex:0 0 100vw;position:relative;padding:6vh 6vw 10vh 6vw;display:flex;flex-direction:column;overflow:hidden}
+  .slide.light{color:var(--ink)}
+  .slide.dark{color:var(--paper)}
+
+  /* Default page: thicker overlay to keep text readable */
+  .slide::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;transition:background .7s ease}
+  .slide.light::before{background:rgba(var(--paper-rgb),.78);backdrop-filter:blur(3px)}
+  .slide.dark::before{background:rgba(var(--ink-rgb),.78);backdrop-filter:blur(3px)}
+  /* Hero page: overlay greatly reduced so the WebGL background shows through clearly */
+  .slide.hero.light::before{background:rgba(var(--paper-rgb),.16);backdrop-filter:none}
+  .slide.hero.dark::before{background:rgba(var(--ink-rgb),.12);backdrop-filter:none}
+  /* Hero page: subtle top/bottom fade to keep the chrome/foot areas readable */
+  .slide.hero::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none}
+  .slide.hero.light::after{background:linear-gradient(180deg,rgba(var(--paper-rgb),.28) 0%,rgba(var(--paper-rgb),0) 14%,rgba(var(--paper-rgb),0) 86%,rgba(var(--paper-rgb),.28) 100%)}
+  .slide.hero.dark::after{background:linear-gradient(180deg,rgba(var(--ink-rgb),.32) 0%,rgba(var(--ink-rgb),0) 14%,rgba(var(--ink-rgb),0) 86%,rgba(var(--ink-rgb),.32) 100%)}
+
+  /* ============ Magazine chrome: top meta + bottom foot ============ */
+  .chrome{display:flex;justify-content:space-between;align-items:flex-start;font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.7}
+  .chrome .left,.chrome .right{display:flex;gap:2.4em;align-items:center}
+  .chrome .sep{width:40px;height:1px;background:currentColor;opacity:.4}
+  .foot{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.55}
+  .foot .title{font-family:var(--serif-zh);font-weight:400;letter-spacing:.05em;text-transform:none;opacity:.75;font-size:13px}
+
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;padding:6px 14px;border:1px solid currentColor;opacity:.85}
+  .rule{width:100%;height:1px;background:currentColor;opacity:.25;margin:3vh 0}
+  .rule.v{width:1px;height:100%;margin:0}
+
+  /* ============ Font rules ============
+     · Serif (Noto Serif SC / Playfair): large titles, key quotes, numbers
+     · Sans-serif (Noto Sans SC): body descriptions, body, supplementary notes
+     · Monospace (IBM Plex Mono): kicker, meta small labels, foot right side
+  */
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.3em;text-transform:uppercase;opacity:.6;margin-bottom:2.6vh}
+  .display{font-family:var(--serif-en);font-weight:700;font-size:11vw;line-height:.92;letter-spacing:-.025em}
+  .display-zh{font-family:var(--serif-zh);font-weight:700;font-size:7.8vw;line-height:1.04;letter-spacing:-.005em}
+  .h1-zh{font-family:var(--serif-zh);font-weight:700;font-size:4.6vw;line-height:1.12;letter-spacing:-.005em}
+  .h2-zh{font-family:var(--serif-zh);font-weight:600;font-size:3.2vw;line-height:1.2;letter-spacing:0}
+  .h3-zh{font-family:var(--serif-zh);font-weight:500;font-size:1.9vw;line-height:1.35}
+  .body-zh{font-family:var(--sans-zh);font-weight:400;font-size:max(15px,1.22vw);line-height:1.75;opacity:.82;letter-spacing:.01em}
+  .body-serif{font-family:var(--serif-zh);font-weight:400;font-size:max(15px,1.3vw);line-height:1.65;opacity:.88}
+  .lead{font-family:var(--serif-zh);font-weight:400;font-size:1.9vw;line-height:1.4;opacity:.85}
+  .meta{font-family:var(--mono);font-size:max(11px,.88vw);letter-spacing:.16em;text-transform:uppercase;opacity:.6}
+  .big-num{font-family:var(--serif-en);font-weight:800;font-size:10vw;line-height:.85;letter-spacing:-.03em;font-feature-settings:"tnum"}
+  .mid-num{font-family:var(--serif-en);font-weight:700;font-size:5.5vw;line-height:.88;letter-spacing:-.02em;font-feature-settings:"tnum"}
+  .ghost{font-family:var(--serif-en);font-weight:900;font-size:34vw;line-height:.8;opacity:.06;letter-spacing:-.04em;position:absolute;font-feature-settings:"tnum"}
+  em{font-style:italic;font-family:var(--serif-en)}
+  .en{font-family:var(--serif-en);font-style:italic;font-weight:500}
+
+  /* ============ Layout utilities ============ */
+  .col{display:flex;flex-direction:column;gap:2.4vh}
+  .row{display:flex;align-items:center;gap:3vw}
+  .grid-6{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4vw 6vw;flex:1;align-content:center;padding:2vh 0}
+  .grid-9{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:3vh 4vw;flex:1;align-content:center}
+  .grid-4{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:4vh 6vw;flex:1;align-content:center}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:4vw;flex:1;align-content:center}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:4vw;flex:1;align-items:center}
+  .split-55{display:grid;grid-template-columns:55fr 45fr;gap:5vw;flex:1;align-items:stretch}
+  .fill{flex:1}
+  .center{align-items:center;justify-content:center;text-align:center}
+  .bottom-left{position:absolute;left:6vw;bottom:9vh;max-width:50vw}
+  .bottom-right{position:absolute;right:6vw;bottom:9vh;max-width:50vw;text-align:right}
+  .top-right{position:absolute;right:6vw;top:6vh;text-align:right}
+
+  /* ============ Stat (number matrix) ============ */
+  .stat{display:flex;flex-direction:column;gap:1vh;align-items:flex-start}
+  .stat .n{font-family:var(--serif-en);font-weight:800;font-size:8vw;line-height:.88;letter-spacing:-.03em;font-feature-settings:"tnum"}
+  .stat .l{font-family:var(--sans-zh);font-size:max(13px,1.05vw);opacity:.7;margin-top:1vh;font-weight:400;line-height:1.5}
+  .stat .m{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;opacity:.5;margin-bottom:.2vh}
+
+  /* ============ Callout (quote box) ============ */
+  .callout{padding:3vh 2.4vw;border-left:3px solid currentColor;position:relative;font-family:var(--serif-zh);font-size:max(15px,1.2vw);line-height:1.55;opacity:.92}
+  .slide.light .callout{background:rgba(var(--ink-rgb),.05)}
+  .slide.dark .callout{background:rgba(var(--paper-rgb),.06)}
+  .callout .cite{display:block;margin-top:1.6vh;font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.6}
+  .callout .q-big{font-family:var(--serif-zh);font-weight:600;font-size:max(17px,1.6vw);line-height:1.42}
+
+  /* ============ Platform (platform card) ============ */
+  .plat{display:flex;flex-direction:column;justify-content:flex-end;padding:2vh 0;border-top:1px solid currentColor;border-color:rgba(127,127,127,.35)}
+  .plat .name{font-family:var(--serif-zh);font-weight:700;font-size:1.8vw;margin-bottom:.6vh}
+  .plat .nb{font-family:var(--serif-en);font-weight:700;font-size:3.2vw;letter-spacing:-.02em;line-height:1;font-feature-settings:"tnum"}
+  .plat .sub{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.55;margin-top:.6vh}
+  .plat .fill{font-family:var(--sans-zh);font-weight:300;font-size:2.4vw;opacity:.28;letter-spacing:-.01em;line-height:1}
+
+  /* ============ Rowline (table row) ============ */
+  .rowline{display:grid;grid-template-columns:1fr 2fr 1fr;gap:2vw;padding:2.2vh 0;border-top:1px solid currentColor;align-items:center;border-color:rgba(127,127,127,.25)}
+  .rowline:last-child{border-bottom:1px solid currentColor;border-color:rgba(127,127,127,.25)}
+  .rowline .k{font-family:var(--serif-zh);font-weight:700;font-size:1.7vw}
+  .rowline .v{font-family:var(--sans-zh);font-weight:400;font-size:max(14px,1.2vw);opacity:.85;line-height:1.55}
+  .rowline .m{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.6;justify-self:end}
+
+  /* ============ Pillar (pillar card) ============ */
+  .pillar{display:flex;flex-direction:column;gap:1.8vh}
+  .pillar .ic{font-family:var(--serif-en);font-style:italic;font-size:2.6vw;opacity:.45;font-weight:400}
+  .pillar .ic svg{width:2.8vw;height:2.8vw;stroke-width:1.2;opacity:.7}
+  .pillar .t{font-family:var(--serif-zh);font-weight:700;font-size:2.4vw;line-height:1.1}
+  .pillar .d{font-family:var(--sans-zh);font-weight:400;font-size:max(14px,1.1vw);opacity:.76;line-height:1.6}
+
+  /* ============ Signature / Highlight ============ */
+  .sign{font-family:var(--serif-en);font-style:italic;font-weight:500;font-size:2vw;opacity:.7}
+  .hi{position:relative;display:inline}
+  .slide.dark .hi::after{content:"";position:absolute;left:-.1em;right:-.1em;bottom:-.05em;height:.28em;background:rgba(var(--paper-rgb),.15);z-index:-1}
+  .slide.light .hi::after{content:"";position:absolute;left:-.1em;right:-.1em;bottom:-.05em;height:.28em;background:rgba(var(--ink-rgb),.08);z-index:-1}
+
+  /* ============ Icons（Lucide via CDN） ============ */
+  .ico{width:1em;height:1em;display:inline-block;vertical-align:-.12em;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  .ico-lg,.ico-md,.ico-sm{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+  .ico-lg{width:2.6vw;height:2.6vw;stroke-width:1.2;display:inline-block}
+  .ico-md{width:1.8vw;height:1.8vw;stroke-width:1.3;display:inline-block;vertical-align:-.4em}
+  .ico-sm{width:1.1vw;height:1.1vw;stroke-width:1.4;display:inline-block;vertical-align:-.15em;opacity:.7}
+
+  /* ============ Image placeholder (dashed box, hints the designer's position) ============ */
+  .img-slot{border:1.5px dashed rgba(127,127,127,.4);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1vh;padding:2vh 2vw;font-family:var(--mono);font-size:10px;letter-spacing:.28em;text-transform:uppercase;opacity:.55;position:relative;aspect-ratio:16/9;width:100%;max-height:56vh;margin-inline:auto;box-sizing:border-box}
+  .img-slot::before{content:"";position:absolute;inset:8px;border:1px solid currentColor;opacity:.2}
+  .img-slot .plus{font-size:2vw;font-weight:300;opacity:.5;letter-spacing:0}
+  .img-slot .label{position:relative;z-index:2;text-align:center}
+  .img-slot.r-4x3{aspect-ratio:4/3}
+  .img-slot.r-3x2{aspect-ratio:3/2}
+  .img-slot.r-1x1{aspect-ratio:1/1}
+
+  /* ============ Image fill box (key: fixed height + crop bottom only) ============
+     Important constraint: control the height precisely with inline height:Nvh, do not use aspect-ratio (it will blow out the layout)
+     object-position:top center ensures the top and sides are never cropped, only the bottom is cropped
+  */
+  .frame-img{overflow:hidden;position:relative;background:rgba(0,0,0,.04);box-sizing:border-box;width:100%;border-radius:4px}
+  .slide.dark .frame-img{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12)}
+  .frame-img > img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+  .frame-cap{display:flex;justify-content:space-between;align-items:baseline;gap:1vw;margin-top:.8vh;font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;opacity:.72}
+  .frame-cap .pf{font-family:var(--serif-zh);font-weight:600;font-size:max(13px,1vw);letter-spacing:.04em;text-transform:none;opacity:.94}
+  .frame-cap .nb{font-family:var(--serif-en);font-style:italic;font-size:max(15px,1.2vw);letter-spacing:.02em;text-transform:none;opacity:.88}
+  .frame-cap .idx{font-family:var(--mono);opacity:.5}
+  figure.tile{display:flex;flex-direction:column;margin:0;min-width:0}
+  figure.tile > .frame-img{flex:0 0 auto}
+
+  /* ============ Navigation ============ */
+  #nav{position:fixed;left:50%;bottom:2.6vh;transform:translateX(-50%);z-index:30;display:flex;gap:10px;padding:8px 14px;border-radius:999px;background:rgba(0,0,0,.18);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  #nav .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);cursor:pointer;transition:all .3s ease;border:0;padding:0}
+  #nav .dot:hover{background:rgba(255,255,255,.5);transform:scale(1.15)}
+  #nav .dot.active{background:rgba(255,255,255,.95);width:22px;border-radius:999px}
+  body.light-bg #nav{background:rgba(255,255,255,.25)}
+  body.light-bg #nav .dot{background:rgba(var(--ink-rgb),.25)}
+  body.light-bg #nav .dot.active{background:rgba(var(--ink-rgb),.9)}
+  #hint{position:fixed;bottom:3vh;right:3vw;z-index:30;font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;opacity:.4;mix-blend-mode:difference;color:#aaa}
+
+  /* ============================================================
+     ============ LAYOUTS API · agent-facing classes (v2) ============
+     All skeletons in layouts.md are based on this set of naming below.
+     If you see a class in layouts.md, it must be defined below.
+     ============================================================ */
+
+  /* ---------- .frame: main content container for each page ---------- */
+  .frame{flex:1;display:flex;flex-direction:column;min-height:0}
+  /* When .frame also has a grid class, the grid's display:grid overrides flex */
+  .frame.grid-2-7-5,
+  .frame.grid-2-6-6,
+  .frame.grid-2-8-4,
+  .frame.grid-3-3,
+  .frame.grid-6{display:grid}
+
+  /* ---------- Title hierarchy (API names, serif-led) ---------- */
+  .h-hero{
+    font-family:var(--serif-zh);
+    font-weight:900;
+    font-size:10vw;
+    line-height:.96;
+    letter-spacing:-.02em;
+  }
+  .h-xl{
+    font-family:var(--serif-zh);
+    font-weight:700;
+    font-size:6.2vw;
+    line-height:1.08;
+    letter-spacing:-.01em;
+  }
+  .h-sub{
+    font-family:var(--serif-zh);
+    font-weight:500;
+    font-size:3.1vw;
+    line-height:1.25;
+    letter-spacing:0;
+    opacity:.7;
+  }
+  .h-md{
+    font-family:var(--serif-zh);
+    font-weight:600;
+    font-size:2.3vw;
+    line-height:1.3;
+  }
+  /* English titles only (Playfair serif) */
+  .h-hero-en,.h-xl-en{font-family:var(--serif-en);letter-spacing:-.025em}
+
+  /* ---------- lead intro line ---------- */
+  .lead{
+    font-family:var(--serif-zh);
+    font-weight:400;
+    font-size:1.75vw;
+    line-height:1.5;
+    opacity:.86;
+  }
+
+  /* ---------- meta-row bottom metadata ---------- */
+  .meta-row{
+    display:flex;
+    gap:1.2em;
+    align-items:baseline;
+    flex-wrap:wrap;
+    font-family:var(--mono);
+    font-size:max(12px,.92vw);
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    opacity:.6;
+  }
+
+  /* ---------- stat-card (for data headline boards) ---------- */
+  .stat-card{
+    display:flex;
+    flex-direction:column;
+    gap:.8vh;
+    align-items:flex-start;
+    padding-top:1.6vh;
+    border-top:1px solid currentColor;
+    border-color:rgba(127,127,127,.3);
+  }
+  .stat-card .stat-label{
+    font-family:var(--mono);
+    font-size:max(10px,.78vw);
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    opacity:.55;
+  }
+  .stat-card .stat-nb{
+    font-family:var(--serif-en);
+    font-weight:800;
+    font-size:5.8vw;
+    line-height:.9;
+    letter-spacing:-.03em;
+    font-feature-settings:"tnum";
+    margin-top:.4vh;
+  }
+  .stat-card .stat-nb .stat-unit{
+    font-family:var(--serif-zh);
+    font-weight:500;
+    font-size:.38em;
+    letter-spacing:0;
+    opacity:.72;
+    margin-left:.14em;
+  }
+  .stat-card .stat-note{
+    font-family:var(--sans-zh);
+    font-weight:400;
+    font-size:max(13px,1.05vw);
+    line-height:1.5;
+    opacity:.72;
+    margin-top:.6vh;
+  }
+  /* When stat-card is used in grid-4 (2x2), the number can be larger */
+  .grid-4 .stat-card .stat-nb{font-size:7.5vw}
+  /* When there are only 3, the text can also be slightly larger */
+  .grid-3 .stat-card .stat-nb{font-size:6.8vw}
+
+  /* ---------- pipeline ---------- */
+  .pipeline-section{
+    margin-top:4.4vh;
+    padding-top:2.8vh;
+    border-top:1px dashed rgba(127,127,127,.32);
+  }
+  .pipeline-section:first-of-type{
+    border-top:0;
+    padding-top:0;
+    margin-top:3vh;
+  }
+  .pipeline-label{
+    font-family:var(--mono);
+    font-size:max(11px,.85vw);
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    opacity:.62;
+    margin-bottom:2.2vh;
+  }
+  .pipeline{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:1.2vw;
+  }
+  .pipeline[data-cols="3"]{grid-template-columns:repeat(3,1fr)}
+  .pipeline[data-cols="4"]{grid-template-columns:repeat(4,1fr)}
+  .pipeline[data-cols="6"]{grid-template-columns:repeat(6,1fr)}
+  .step{
+    display:flex;
+    flex-direction:column;
+    gap:.8vh;
+    padding-top:1.4vh;
+    border-top:1px solid currentColor;
+    border-color:rgba(127,127,127,.35);
+  }
+  .step-nb{
+    font-family:var(--serif-en);
+    font-style:italic;
+    font-weight:500;
+    font-size:1.15vw;
+    opacity:.45;
+  }
+  .step-title{
+    font-family:var(--sans-zh);
+    font-weight:700;
+    font-size:1.55vw;
+    letter-spacing:.01em;
+    line-height:1.2;
+  }
+  .step-desc{
+    font-family:var(--sans-zh);
+    font-weight:400;
+    font-size:max(12px,.95vw);
+    line-height:1.45;
+    opacity:.72;
+  }
+
+  /* ---------- Grid (used by layouts.md) ---------- */
+  /* These classes work when attached to any container on their own, not relying on the .frame compound selector */
+  .grid-2-7-5{display:grid;grid-template-columns:7fr 5fr;gap:3vw 4vh;align-items:start}
+  .grid-2-6-6{display:grid;grid-template-columns:1fr 1fr;gap:3vw 4vh;align-items:start}
+  .grid-2-8-4{display:grid;grid-template-columns:8fr 4fr;gap:3vw 4vh;align-items:start}
+  .grid-3-3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-auto-rows:minmax(0,1fr);
+    gap:2.4vh 2vw;
+  }
+  /* grid-6 is already defined as 3x2 in the old styles, here we only add align */
+
+  /* ---------- Image frame-img (main naming in layouts.md) ---------- */
+  /* Already defined in the old styles, here we add the img-cap naming alias and enhancements */
+  figure.frame-img{margin:0;display:flex;flex-direction:column;min-width:0}
+  .img-cap{
+    display:block;
+    margin-top:.8vh;
+    font-family:var(--mono);
+    font-size:max(10px,.8vw);
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    opacity:.6;
+  }
+  /* callout src naming alias */
+  .callout-src{
+    display:block;
+    margin-top:1.6vh;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    opacity:.6;
+  }
+
+  /* ---------- chrome & foot fallback (simple form for layouts.md) ---------- */
+  .chrome{font-family:var(--mono);font-size:max(11px,.78vw);letter-spacing:.2em;text-transform:uppercase;opacity:.62}
+  .foot{font-family:var(--mono);font-size:max(11px,.78vw);letter-spacing:.18em;text-transform:uppercase;opacity:.5}
+
+  /* ---------- Responsive fallback ---------- */
+  @media (max-width:900px){
+    .display{font-size:16vw}
+    .display-zh{font-size:12vw}
+    .h1-zh{font-size:7vw}
+    .h-hero{font-size:14vw}
+    .h-xl{font-size:9vw}
+    .pipeline{grid-template-columns:repeat(2,1fr)}
+    .grid-2-7-5,.grid-2-6-6,.grid-2-8-4{grid-template-columns:1fr}
+  }
+
+  /* ============ Premium 3D UI FX (appended) ============ */
+
+  /* One shared vanishing point so page-switch depth & tilt read as one perspective */
+  .slide{perspective:1600px}
+
+  /* -- Upgraded .reveal: restrained one-time entrance (opacity + small rise, no depth/blur) -- */
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .55s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+  .slide.active .reveal{opacity:1;transform:none}
+  .reveal-delay-2{transition-delay:.12s}
+  .reveal-delay-3{transition-delay:.26s}
+  .reveal-delay-4{transition-delay:.4s}
+  .reveal-delay-5{transition-delay:.54s}
+  .reveal-delay-6{transition-delay:.68s}
+  .reveal-delay-7{transition-delay:.82s}
+  /* Big titles settle in from a whisper of depth (perspective() in the transform itself,
+     so the tiny translateZ scale-up is real even under flattened parents) */
+  .slide h1.reveal{transform:perspective(1400px) translateY(32px) translateZ(-60px)}
+  .slide h2.h-sub.reveal{transform:perspective(1400px) translateY(28px) translateZ(-46px)}
+
+  /* -- 3D tilt cards: classes tilt-3d / tilt-active / tilt-leave are toggled by JS on hover -- */
+  .tilt-3d{transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .32s ease}
+  .tilt-3d.tilt-active{box-shadow:0 24px 48px -16px rgba(0,0,0,.55),0 6px 18px -8px rgba(0,0,0,.28)}
+  body.light-bg .tilt-3d.tilt-active{box-shadow:0 24px 48px -16px rgba(10,31,61,.30),0 6px 18px -8px rgba(10,31,61,.15)}
+  .tilt-3d.tilt-leave{transition:transform .6s cubic-bezier(.34,1.56,.64,1),box-shadow .45s ease;box-shadow:0 0 0 rgba(0,0,0,0)}
+
+  /* -- Page-switch parallax: depth drift with staggered delay (--pd set by JS) -- */
+  [data-parallax]{transform:translateY(34px) translateZ(-56px);opacity:0;transition:transform 1s cubic-bezier(.16,1,.3,1),opacity .9s ease;transition-delay:var(--pd,0s);will-change:transform,opacity}
+  .slide.active [data-parallax]{transform:none;opacity:1}
+
+  /* -- Static soft ambient glow (no breathing, no drift) -- */
+  #ambient-glow{position:fixed;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;z-index:12;pointer-events:none;border-radius:50%;mix-blend-mode:screen;background:radial-gradient(circle closest-side,rgba(54,216,232,.13) 0%,rgba(54,216,232,.05) 42%,rgba(54,216,232,0) 70%)}
+  body.light-bg #ambient-glow{background:radial-gradient(circle closest-side,rgba(10,31,61,.06) 0%,rgba(10,31,61,.028) 42%,rgba(10,31,61,0) 70%);mix-blend-mode:soft-light}
+
+  /* -- Slide 18 · final-push callout (static coral accent, no pulse) -- */
+  .slide.dark .callout-final{border-left:3px solid #FF7F50;background:linear-gradient(90deg,rgba(255,127,80,.10),rgba(255,127,80,.015) 70%)}
+  .slide.dark .callout-final .q-big{font-size:max(19px,1.9vw);font-weight:600;line-height:1.5}
+
+  /* ============================================================
+     ============ Premium 贵气 FX (appended) ============
+     Restrained & one-shot only: no infinite/breathing/looping motion.
+     ============================================================ */
+
+  /* -- Static gradient fine line under every kicker (no flow animation) -- */
+  .kicker{position:relative;padding-bottom:1.8vh}
+  .kicker::after{
+    content:"";position:absolute;left:0;bottom:0;width:16vw;max-width:240px;height:1px;
+    background:linear-gradient(90deg,#0a1f3d,#36d8e8,#0a1f3d);
+  }
+
+  /* -- Glassmorphism cards: translucent base + blur + thin bright border + top highlight bar -- */
+  .pillar,.step,.stat-card,.plat,.work-card{
+    position:relative;border-radius:12px;
+    border:1px solid rgba(127,127,127,.22);
+    background:rgba(var(--paper-rgb),.42);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    padding:2.2vh 1.3vw;
+    transition:background .3s ease,border-color .3s ease,box-shadow .35s ease;
+  }
+  .slide.dark .pillar,.slide.dark .step,.slide.dark .stat-card,.slide.dark .plat,.slide.dark .work-card{background:rgba(var(--ink-rgb),.5)}
+  .pillar::before,.step::before,.stat-card::before,.plat::before,.work-card::before{
+    content:"";position:absolute;top:0;left:12%;right:12%;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(54,216,232,.72),transparent);
+  }
+  .pillar:hover,.step:hover,.stat-card:hover,.plat:hover,.work-card:hover{
+    background:rgba(var(--paper-rgb),.66);
+    border-color:rgba(54,216,232,.5);
+    box-shadow:0 16px 34px -16px rgba(10,31,61,.3);
+  }
+  .slide.dark .pillar:hover,.slide.dark .step:hover,.slide.dark .stat-card:hover,.slide.dark .plat:hover,.slide.dark .work-card:hover{
+    background:rgba(var(--ink-rgb),.68);
+    box-shadow:0 16px 34px -16px rgba(0,0,0,.6);
+  }
+
+  /* -- Act-divider big Lucide icon (static soft glow, no pulse) -- */
+  .act-ico{display:flex;justify-content:center;padding-bottom:.5vh}
+  .ico-act{
+    width:4.4vw;height:4.4vw;stroke-width:1;stroke:currentColor;fill:none;stroke-linecap:round;stroke-linejoin:round;
+    opacity:.92;filter:drop-shadow(0 0 10px rgba(54,216,232,.35));
+  }
+
+  /* -- Portfolio work cards + video link placeholders -- */
+  .work-card{display:flex;flex-direction:column;align-items:flex-start;gap:1.4vh;overflow:hidden}
+  .work-card .ico-lg{color:var(--ink);opacity:.92;filter:drop-shadow(0 0 8px rgba(54,216,232,.4));margin-bottom:.6vh}
+  .slide.dark .work-card .ico-lg{color:var(--paper)}
+  .wc-t{font-family:var(--serif-zh);font-weight:700;font-size:2.1vw;line-height:1.15}
+  .wc-s{font-family:var(--serif-zh);font-weight:500;font-size:1.25vw;line-height:1.3;opacity:.85}
+  .wc-d{font-family:var(--sans-zh);font-weight:400;font-size:max(13px,1.02vw);line-height:1.6;opacity:.74}
+  a[data-video-link]{color:inherit;text-decoration:none;opacity:.88;transition:opacity .25s ease}
+  a[data-video-link]:hover{opacity:1}
+  .wc-link{
+    margin-top:auto;padding-top:2vh;
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    border-bottom:1px solid rgba(54,216,232,.65);padding-bottom:3px;display:inline-flex;align-items:center;gap:.5em;
+  }
+  .wc-link:hover{border-bottom-color:#36d8e8}
+
+  /* -- Reduced motion: kill all FX (incl. the new 贵气 set) -- */
+  @media (prefers-reduced-motion:reduce){
+    .reveal{opacity:1;transform:none;transition:none}
+    [data-parallax]{transform:none;opacity:1;transition:none;will-change:auto}
+    #ambient-glow{opacity:.5}
+    .tilt-3d,.tilt-3d.tilt-active,.tilt-3d.tilt-leave{transition:none;box-shadow:none}
+    .slide.dark .callout-final{box-shadow:none}
+    .pillar,.step,.stat-card,.plat,.work-card{backdrop-filter:none;-webkit-backdrop-filter:none;transition:none}
+    .slide h1.reveal,.slide h2.h-sub.reveal{transform:none}
+    #ambient-glow{transition:none;transform:none}
+    #top-sheen{animation:none;transform:none;opacity:.5}
+    .slide>.foot::before{opacity:.3}
+    .ico,.ico-sm,.ico-md,.ico-lg{transition:none}
+    .ico:hover,.ico-sm:hover,.ico-md:hover,.ico-lg:hover{transform:none;filter:none}
+  }
+
+  /* ESC overview clones have no .active ancestor; force elements visible in the index grid */
+  #overview .reveal{opacity:1;transform:none;filter:none;transition:none}
+  #overview [data-parallax]{opacity:1!important;transform:none!important;transition:none!important}
+
+  /* ============================================================
+     ============ Premium 贵气 FX #2 (appended) ============
+     Interaction-only or ≥18s cycles only — no flashing loops.
+     ============================================================ */
+
+  /* -- Foot: one hairline gradient above the brand row (static, no flow) -- */
+  .slide>.foot::before{content:"";position:absolute;top:-2.2vh;left:4%;right:4%;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(54,216,232,.5) 30%,rgba(54,216,232,.5) 70%,transparent);opacity:.6}
+
+  /* -- Ambient glow: pointer micro-drift, glided by a CSS transition (no rAF loop) -- */
+  #ambient-glow{transition:transform 1.4s cubic-bezier(.22,1,.36,1)}
+
+  /* -- Top sheen: one very slow gradient drift (90s alternate ≫ 18s, muted) -- */
+  #top-sheen{position:fixed;top:0;left:0;width:100%;height:36vh;z-index:11;pointer-events:none;
+    mix-blend-mode:screen;will-change:transform;
+    background:radial-gradient(95% 120% at 50% -6%,rgba(54,216,232,.13) 0%,rgba(54,216,232,.05) 40%,rgba(54,216,232,0) 66%);
+    animation:sheenDrift 90s ease-in-out infinite alternate}
+  body.light-bg #top-sheen{background:radial-gradient(95% 120% at 50% -6%,rgba(10,31,61,.09) 0%,rgba(10,31,61,.03) 40%,rgba(10,31,61,0) 66%);mix-blend-mode:soft-light}
+  @keyframes sheenDrift{from{transform:translateX(-2.6vw)}to{transform:translateX(2.6vw)}}
+
+  /* -- Icon hover: tiny scale + soft glow, only while the pointer is on them -- */
+  .ico,.ico-sm,.ico-md,.ico-lg{transition:transform .45s cubic-bezier(.34,1.56,.64,1),filter .45s ease}
+  .ico:hover,.ico-sm:hover,.ico-md:hover,.ico-lg:hover{transform:scale(1.16);filter:drop-shadow(0 0 9px rgba(54,216,232,.45))}
+
+  /* ============ Three.js per-slide motifs (re-added · one renderer, one moving canvas) ============
+     The single <canvas class="three-motif"> is re-parented to the current .slide.active.
+     Text stays above it: chrome / frame / foot are lifted to z-index:2 (canvas sits at z-index:1). */
+  canvas.three-motif{position:absolute;z-index:1;pointer-events:none;display:block}
+  .slide > .chrome,.slide > .frame,.slide > .foot{position:relative;z-index:2}
+
+  /* ============ Sparse-page fillers: faint ghost numerals + ring / dot / grid deco ============
+     Static, low-saturation, aria-hidden; no animation → safe under prefers-reduced-motion.
+     z-index 2 keeps them above the three.js canvas (z 1); .frame / .foot paint above them in DOM. */
+  .ghost{z-index:2;pointer-events:none;user-select:none}
+  .deco-ring,.deco-dot,.deco-grid{position:absolute;pointer-events:none;z-index:2}
+  .deco-ring{border-radius:50%;border:1px solid rgba(10,31,61,.16)}
+  .deco-ring::after{content:"";position:absolute;inset:22%;border-radius:50%;border:1px dashed rgba(54,216,232,.5)}
+  .deco-dot{border-radius:50%;background:rgba(255,127,80,.5)}
+  .deco-grid{opacity:.55;background-image:linear-gradient(rgba(10,31,61,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(10,31,61,.08) 1px,transparent 1px);background-size:4vw 4vw;-webkit-mask-image:radial-gradient(circle,black 30%,transparent 74%);mask-image:radial-gradient(circle,black 30%,transparent 74%)}
+</style>
+</head>
+<body>
+
+<canvas id="bg-dark" class="bg"></canvas>
+<canvas id="bg-light" class="bg"></canvas>
+<div id="hint">← → Flip · ESC Index</div>
+<div id="ambient-glow" aria-hidden="true"></div>
+<div id="top-sheen" aria-hidden="true"></div>
+
+<div id="deck">
+
+<!-- ============================================================
+     20 页 · AI 视频重构同城商业（全部 light，第18页 dark）
+     ============================================================ -->
+
+<!-- 01 · 封面 hero light（纯排版 + 品牌 + 标题，无 3D 图标） -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left">
+      <img src="images/logo-black.png" alt="山西一山河文化传媒" style="height:22px;display:inline-block;vertical-align:middle">
+      <span style="font-family:var(--serif-zh);font-weight:600;font-size:14px;letter-spacing:.26em;text-transform:none;opacity:.95">山西一山河</span>
+      <span class="sep"></span>
+      <span>文化传媒 · 招商讲座 · 主讲人 郭斌</span>
+    </div>
+    <div class="right"><span>01 / 20</span></div>
+  </div>
+  <div class="frame" style="display:flex;align-items:center;min-height:80vh;padding-top:4vh">
+    <div data-parallax style="position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;gap:3.4vh;max-width:42vw">
+      <div class="kicker reveal">B2B · 认知破局 ｜ 现场签约专场</div>
+      <h1 class="h-hero reveal" style="font-size:6.4vw;line-height:1.06">AI 视频重构<br>同城商业</h1>
+      <h2 class="h-sub reveal reveal-delay-2" style="opacity:.72">从物理大模型到爆款核销的降维打击</h2>
+      <p class="lead reveal reveal-delay-3" style="max-width:38vw;font-size:1.4vw;line-height:1.6;opacity:.78">一场面向本地商户的认知破局讲座：用前沿 AI 技术建立权威，用同城闭环打通商业核销。</p>
+    </div>
+  </div>
+  <canvas class="three-motif" aria-hidden="true" style="position:absolute;top:0;right:0;width:50vw;height:100%;z-index:1;pointer-events:none"></canvas>
+  <div class="foot">
+    <div class="title">AI 视频重构同城商业</div>
+    <div>ACT 0 · COVER</div>
+  </div>
+</section>
+
+<!-- 02 · 幕间 hero light · ACT I -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 认知篇</span></div>
+    <div class="right"><span>02 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="right:1vw;bottom:-1vh;font-size:33vw;opacity:.07">02</div>
+  <div class="deco-ring" style="right:10vw;top:18vh;width:26vh;height:26vh"></div>
+  <div class="deco-ring" style="right:6vw;top:24vh;width:13vh;height:13vh"></div>
+  <div class="frame" data-parallax style="display:grid;gap:4vh;align-content:start;min-height:80vh;padding-top:5vh">
+    <div class="kicker reveal">ACT I · 认知重构</div>
+    <h1 class="h-hero reveal" style="font-size:7.2vw;line-height:1.12">认知代差<br>即商业红利</h1>
+    <p class="lead reveal reveal-delay-2" style="max-width:56vw">老板不是不需要 AI，而是误以为 AI 只是「失真的动画」。</p>
+    <p class="lead reveal reveal-delay-3" style="max-width:60vw;font-size:1.6vw"><span class="hi">真正值钱的是「会用的外脑」</span>，不是「会开的软件」。</p>
+  </div>
+  <div class="foot">
+    <div class="title">第一幕 · 认知重构</div>
+    <div>ACT I · COGNITION</div>
+  </div>
+</section>
+
+<!-- 03 · 三次跨越 light -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 认知篇</span></div>
+    <div class="right"><span>03 / 20</span></div>
+  </div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">认知速览</div>
+    <h1 class="h1-zh reveal" style="font-size:4vw;margin-bottom:6vh">AI 演进的三次跨越</h1>
+    <div class="grid-3" data-parallax>
+      <div class="pillar reveal">
+        <div class="ic" style="display:flex;align-items:center;gap:1vw"><i data-lucide="search" class="ico-md"></i><span>1.0</span></div>
+        <div class="t">检索时代</div>
+        <div class="d">条件反射式搜索与拼贴，生硬、无创造力。</div>
+      </div>
+      <div class="pillar reveal reveal-delay-2">
+        <div class="ic" style="display:flex;align-items:center;gap:1vw"><i data-lucide="sparkles" class="ico-md"></i><span>2.0</span></div>
+        <div class="t">生成时代</div>
+        <div class="d">看图写文案、单张图生成，缺连贯与物理细节。</div>
+      </div>
+      <div class="pillar reveal reveal-delay-3">
+        <div class="ic" style="display:flex;align-items:center;gap:1vw"><i data-lucide="cpu" class="ico-md"></i><span>3.0</span></div>
+        <div class="t">推理与模拟时代</div>
+        <div class="d">商业意图理解 + 镜头调度 + 物理规律演算的「数字大脑」。</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">AI 演进的三次跨越</div>
+    <div>COGNITION · OVERVIEW</div>
+  </div>
+</section>
+
+<!-- 04 · 案例进化论 light -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 认知篇</span></div>
+    <div class="right"><span>04 / 20</span></div>
+  </div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal" style="margin-bottom:1.4vh">REAL CASE · 临汾汉堡节</div>
+    <h1 class="h1-zh reveal" style="font-size:3.8vw;margin-bottom:1.6vh">爆款案例进化论</h1>
+    <div class="grid-2-6-6 reveal" style="gap:3vw 4vh">
+      <div style="padding:1.7vh 1.6vw;border-left:3px solid rgba(127,127,127,.4);opacity:.55;display:flex;flex-direction:column;gap:1.3vh">
+        <div class="h-md" style="font-size:1.85vw;line-height:1.28">1.0 静态 AI 图文</div>
+        <p class="body-zh" style="opacity:.85;font-size:max(14px,1.12vw);line-height:1.6">食材爆破图曾惊艳，但被同行秒复制，沦为行业基本功。</p>
+        <figure class="frame-img" style="aspect-ratio:16/9;width:100%;margin-top:0.6vh">
+          <img src="images/A2.jpg" alt="1.0 静态 AI 图文">
+        </figure>
+      </div>
+      <div style="padding:1.7vh 1.6vw;border-left:3px solid currentColor;display:flex;flex-direction:column;gap:1.3vh">
+        <div class="h-md" style="font-size:1.85vw;line-height:1.28">2.0 动态 AI 物理视频</div>
+        <p class="body-zh" style="font-size:max(14px,1.12vw);line-height:1.6">肉汁拉丝 · 烟火气升腾 · 微距飞溅，重夺流量定义权。</p>
+        <figure class="frame-img" style="aspect-ratio:16/9;width:100%;margin-top:0.6vh">
+          <img src="images/A3.jpg" alt="2.0 动态 AI 物理视频">
+        </figure>
+      </div>
+    </div>
+    <div class="callout reveal reveal-delay-2" style="margin-top:1.6vh;padding:1.9vh 2.2vw;max-width:70vw">
+      <div class="q-big">静态图人人会做，物理级动态片才是别人抄不走的。</div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">爆款案例进化论 · 临汾汉堡节</div>
+    <div>CASE · EVOLUTION</div>
+  </div>
+</section>
+
+<!-- 05 · 幕间 hero light · ACT II -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 技术篇</span></div>
+    <div class="right"><span>05 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="right:2vw;bottom:-1vh;font-size:30vw;opacity:.07">05</div>
+  <div class="deco-grid" style="right:4vw;top:17vh;width:42vh;height:42vh"></div>
+  <div class="deco-ring" style="left:7vw;bottom:16vh;width:19vh;height:19vh"></div>
+  <div class="frame" data-parallax style="display:grid;gap:4.2vh;align-content:start;min-height:80vh;padding-top:10vh">
+    <div class="kicker reveal">ACT II · 技术硬核</div>
+    <h1 class="h-hero reveal" style="font-size:6.4vw;line-height:1.14">前沿 AI 视频<br>智能化的四大体现</h1>
+  </div>
+  <div class="foot">
+    <div class="title">第二幕 · 技术硬核</div>
+    <div>ACT II · TECH</div>
+  </div>
+</section>
+
+<!-- 06 · 体现一 light · 物理世界模拟 -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 技术篇</span></div>
+    <div class="right"><span>06 / 20</span></div>
+  </div>
+  <div class="frame grid-2-7-5" style="min-height:80vh;align-content:center;padding-top:3vh">
+    <div data-parallax style="display:flex;flex-direction:column;justify-content:space-between;gap:4vh">
+      <div>
+        <div class="kicker reveal">TECH 01 · PHYSICS</div>
+        <h1 class="h1-zh reveal" style="font-size:3.6vw">体现一 · 物理世界模拟</h1>
+        <p class="lead reveal reveal-delay-2" style="font-size:1.5vw;margin-top:3vh">大模型演算真实重力、流体粘性（芝士拉丝）、热气升腾与微距光影。</p>
+      </div>
+      <div class="callout reveal reveal-delay-3">
+        <div class="q-big">把普通产品拍出符合人类生理本能的垂涎感与高级感。</div>
+      </div>
+    </div>
+    <figure class="frame-img reveal reveal-delay-2" style="aspect-ratio:16/9;width:100%;max-height:36vh">
+      <img src="images/A4.jpg" alt="物理世界模拟 · 芝士拉丝">
+    </figure>
+  </div>
+  <div class="foot">
+    <div class="title">体现一 · 物理世界模拟</div>
+    <div>TECH 01 · PHYSICS</div>
+  </div>
+</section>
+
+<!-- 07 · 体现二 light · 主体连贯性 -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 技术篇</span></div>
+    <div class="right"><span>07 / 20</span></div>
+  </div>
+  <div class="frame grid-2-7-5" style="min-height:80vh;align-content:center;padding-top:3vh">
+    <div data-parallax style="display:flex;flex-direction:column;justify-content:space-between;gap:4vh">
+      <div>
+        <div class="kicker reveal">TECH 02 · SUBJECT</div>
+        <h1 class="h1-zh reveal" style="font-size:3.4vw;line-height:1.25">体现二 · 角色与主体<br>连贯性锁定</h1>
+        <p class="lead reveal reveal-delay-2" style="font-size:1.5vw;margin-top:3vh">彻底解决视频「闪烁、变脸、不连贯」的技术瓶颈。</p>
+      </div>
+      <div class="body-zh reveal reveal-delay-3" style="opacity:.8;font-size:max(15px,1.2vw);line-height:1.8">锁定同一产品、门头或数字人，全球高端场景自由穿梭——统一品牌 IP 符号。</div>
+    </div>
+    <figure class="frame-img reveal reveal-delay-2" style="aspect-ratio:16/9;width:100%;max-height:36vh">
+      <img src="images/A5.jpg" alt="角色与主体连贯性锁定">
+    </figure>
+  </div>
+  <div class="foot">
+    <div class="title">体现二 · 主体连贯性</div>
+    <div>TECH 02 · SUBJECT</div>
+  </div>
+</section>
+
+<!-- 08 · 体现三 light · 情绪价值 -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 技术篇</span></div>
+    <div class="right"><span>08 / 20</span></div>
+  </div>
+  <div class="frame grid-2-7-5" style="min-height:80vh;align-content:center;padding-top:3vh">
+    <div data-parallax style="display:flex;flex-direction:column;justify-content:space-between;gap:4vh">
+      <div>
+        <div class="kicker reveal">TECH 03 · EMOTION</div>
+        <h1 class="h1-zh reveal" style="font-size:3.4vw;line-height:1.25">体现三 · 情绪价值<br>千人千面</h1>
+        <div class="reveal reveal-delay-2" style="display:flex;gap:1.2vw;flex-wrap:wrap;margin-top:4vh">
+          <span class="tag">深夜「罪恶感宵夜」</span>
+          <span class="tag">雨天「温情火锅」</span>
+          <span class="tag">午后「治愈甜点」</span>
+          <span class="tag">周五「解压炸鸡」</span>
+        </div>
+      </div>
+      <div class="body-zh reveal reveal-delay-3" style="opacity:.8;font-size:max(15px,1.2vw)">同一种套餐，演算出 10 种情绪爆款。</div>
+    </div>
+    <figure class="frame-img reveal reveal-delay-2" style="aspect-ratio:16/9;width:100%;max-height:36vh">
+      <img src="images/A6.jpg" alt="情绪价值 · 千人千面">
+    </figure>
+  </div>
+  <div class="foot">
+    <div class="title">体现三 · 情绪价值</div>
+    <div>TECH 03 · EMOTION</div>
+  </div>
+</section>
+
+<!-- 09 · 体现四 light · 全模态原创与 GEO -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 技术篇</span></div>
+    <div class="right"><span>09 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="right:2vw;top:16vh;font-size:15vw;opacity:.06;letter-spacing:.06em">GEO</div>
+  <div class="deco-ring" style="right:6vw;top:12vh;width:12vh;height:12vh"></div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">TECH 04 · GEO</div>
+    <h1 class="h1-zh reveal" style="font-size:3.8vw;margin-bottom:5vh">体现四 · 全模态原创与 GEO</h1>
+    <div class="grid-4" data-parallax>
+      <div class="pillar reveal">
+        <div class="ic"><i data-lucide="image" class="ico-lg"></i></div>
+        <div class="t">独家图像</div>
+        <div class="d">视觉 100% 原创，<br>全网唯一辨识度。</div>
+      </div>
+      <div class="pillar reveal reveal-delay-2">
+        <div class="ic"><i data-lucide="volume-2" class="ico-lg"></i></div>
+        <div class="t">商业音效</div>
+        <div class="d">听觉专属资产，<br>一秒听出品牌感。</div>
+      </div>
+      <div class="pillar reveal reveal-delay-3">
+        <div class="ic"><i data-lucide="user" class="ico-lg"></i></div>
+        <div class="t">数字肖像</div>
+        <div class="d">真人级数字人资产，<br>IP 形象稳定统一。</div>
+      </div>
+      <div class="pillar reveal reveal-delay-3">
+        <div class="ic"><i data-lucide="search-check" class="ico-lg"></i></div>
+        <div class="t">GEO 语义</div>
+        <div class="d">高语义特征，<br>被大模型优先识别。</div>
+      </div>
+    </div>
+    <div class="body-zh reveal reveal-delay-2" style="margin-top:5vh;text-align:center;opacity:.72">杜绝版权官司，获得最高权重的同城自然推流。</div>
+  </div>
+  <div class="foot">
+    <div class="title">体现四 · 全模态原创与 GEO</div>
+    <div>TECH 04 · GEO</div>
+  </div>
+</section>
+
+<!-- 10 · 幕间 hero light · ACT III -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 商业篇</span></div>
+    <div class="right"><span>10 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="right:2vw;bottom:-1vh;font-size:30vw;opacity:.07">10</div>
+  <div class="deco-ring" style="right:6vw;top:24vh;width:24vh;height:24vh"></div>
+  <div class="frame" data-parallax style="display:grid;gap:4.2vh;align-content:start;min-height:80vh;padding-top:10vh">
+    <div class="kicker reveal">ACT III · 商业赋能</div>
+    <h1 class="h-hero reveal" style="font-size:6.4vw;line-height:1.14">AI 赋予本地商户的<br>四大变现路径</h1>
+  </div>
+  <div class="foot">
+    <div class="title">第三幕 · 商业赋能</div>
+    <div>ACT III · BUSINESS</div>
+  </div>
+</section>
+
+<!-- 11 · 四条变现路径 light -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 商业篇</span></div>
+    <div class="right"><span>11 / 20</span></div>
+  </div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">MONETIZATION</div>
+    <h1 class="h1-zh reveal" style="font-size:4vw;margin-bottom:5vh">四条变现路径</h1>
+    <div class="pipeline" data-parallax data-cols="4">
+      <div class="step reveal">
+        <div style="display:flex;align-items:center;gap:.9vw"><i data-lucide="shopping-bag" class="ico-md" style="opacity:.85"></i><div class="step-nb">01</div></div>
+        <div class="step-title">同城团购秒杀</div>
+        <div class="step-desc">3 秒真实门头 + AI 微距物理暴击 + 挂载 POI<br>→ 看饿即下单，24h 到店核销</div>
+      </div>
+      <div class="step reveal reveal-delay-2">
+        <div style="display:flex;align-items:center;gap:.9vw"><i data-lucide="gem" class="ico-md" style="opacity:.85"></i><div class="step-nb">02</div></div>
+        <div class="step-title">高毛利单品重构</div>
+        <div class="step-desc">影视级光影重构普通套餐<br>→ 打破价格锚定，溢价销售</div>
+      </div>
+      <div class="step reveal reveal-delay-3">
+        <div style="display:flex;align-items:center;gap:.9vw"><i data-lucide="users" class="ico-md" style="opacity:.85"></i><div class="step-nb">03</div></div>
+        <div class="step-title">私域高客单拦截</div>
+        <div class="step-desc">痛点解答 + 测评短视频（房产 / 美业）<br>→ 缩短决策周期，低成本筛高意向</div>
+      </div>
+      <div class="step reveal reveal-delay-3">
+        <div style="display:flex;align-items:center;gap:.9vw"><i data-lucide="bot" class="ico-md" style="opacity:.85"></i><div class="step-nb">04</div></div>
+        <div class="step-title">数字人 24h 挂单</div>
+        <div class="step-desc">1:1 克隆老板 / 店长，政策播报<br>→ 非营业时间吃尽同城长尾</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">四条变现路径</div>
+    <div>MONETIZATION · 4 LANES</div>
+  </div>
+</section>
+
+<!-- 12 · 幕间 hero light · ACT IV -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 宣发篇</span></div>
+    <div class="right"><span>12 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="right:2vw;bottom:-1vh;font-size:30vw;opacity:.07">12</div>
+  <div class="deco-ring" style="right:10vw;top:18vh;width:25vh;height:25vh"></div>
+  <div class="deco-dot" style="right:16vw;top:30vh;width:10px;height:10px"></div>
+  <div class="frame" data-parallax style="display:grid;gap:4.2vh;align-content:start;min-height:80vh;padding-top:10vh">
+    <div class="kicker reveal">ACT IV · 宣发策略</div>
+    <h1 class="h-hero reveal" style="font-size:6.6vw;line-height:1.14">AI 同城宣发与<br>算法霸屏的四大策略</h1>
+  </div>
+  <div class="foot">
+    <div class="title">第四幕 · 宣发策略</div>
+    <div>ACT IV · LAUNCH</div>
+  </div>
+</section>
+
+<!-- 13 · 策略一 light · 矩阵赛马 -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 宣发篇</span></div>
+    <div class="right"><span>13 / 20</span></div>
+  </div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">STRATEGY 01</div>
+    <h1 class="h1-zh reveal" style="font-size:3.4vw;line-height:1.3;margin-bottom:5vh">1 段实拍 → 30 条爆款矩阵赛马</h1>
+    <div class="pipeline" data-parallax data-cols="3">
+      <div class="step reveal">
+        <div style="display:flex;align-items:center;gap:.9vw"><i data-lucide="video" class="ico-md" style="opacity:.85"></i><div class="step-nb">01</div></div>
+        <div class="step-title">3 秒真实素材</div>
+        <div class="step-desc">一段门头实拍，先立真实底色</div>
+      </div>
+      <div class="step reveal reveal-delay-2">
+        <div style="display:flex;align-items:center;gap:.9vw"><i data-lucide="bot" class="ico-md" style="opacity:.85"></i><div class="step-nb">02</div></div>
+        <div class="step-title">AI 智能体矩阵</div>
+        <div class="step-desc">自动换背景 / BGM / Hook，批量二创</div>
+      </div>
+      <div class="step reveal reveal-delay-3">
+        <div style="display:flex;align-items:center;gap:.9vw"><i data-lucide="zap" class="ico-md" style="opacity:.85"></i><div class="step-nb">03</div></div>
+        <div class="step-title">5 分钟 30 条不重样</div>
+        <div class="step-desc">矩阵赛马，数据替你选爆款</div>
+      </div>
+    </div>
+    <div class="callout reveal reveal-delay-3" style="margin-top:5vh;max-width:70vw">
+      <div class="q-big">让数据替你选爆款，用最少的成本试出最多的可能。</div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">矩阵赛马 · 1 段实拍 30 条爆款</div>
+    <div>STRATEGY 01 · MATRIX</div>
+  </div>
+</section>
+
+<!-- 14 · 策略二 light · 安全防封（双环示意） -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 宣发篇</span></div>
+    <div class="right"><span>14 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="right:2.5vw;top:37vh;font-size:7.5vw;opacity:.06;letter-spacing:.22em">SAFE</div>
+  <div class="deco-ring" style="left:5.5vw;top:24vh;width:20vh;height:20vh"></div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">STRATEGY 02</div>
+    <h1 class="h1-zh reveal" style="font-size:3.4vw;line-height:1.3;margin-bottom:4vh">真实底色 + AI 提质安全防封</h1>
+    <div class="reveal" style="position:relative;height:38vh;display:flex;align-items:center;justify-content:center">
+      <div style="position:absolute;left:50%;top:50%;transform:translate(-63%,-50%);width:min(23vw,33vh);height:min(23vw,33vh);border-radius:50%;border:1.5px solid currentColor;opacity:.9;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(var(--paper-rgb),.55)">
+        <div>
+          <div style="font-family:var(--serif-en);font-weight:700;font-size:min(2.2vw,3.2vh)">30%–50%</div>
+          <div style="font-family:var(--sans-zh);font-size:max(12px,.95vw);opacity:.72;margin-top:1vh">真实环境<br>过风控</div>
+        </div>
+      </div>
+      <div style="position:absolute;right:50%;top:50%;transform:translate(63%,-50%);width:min(23vw,33vh);height:min(23vw,33vh);border-radius:50%;border:1.5px solid #36D8E8;opacity:.9;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(var(--paper-rgb),.55)">
+        <div>
+          <div style="font-family:var(--serif-en);font-weight:700;font-size:min(2.2vw,3.2vh);color:#36D8E8">AI</div>
+          <div style="font-family:var(--sans-zh);font-size:max(12px,.95vw);opacity:.72;margin-top:1vh">特效重构<br>拉体验</div>
+        </div>
+      </div>
+      <div style="position:relative;z-index:2;font-family:var(--mono);font-size:12px;letter-spacing:.2em;opacity:.85;text-align:center">防封 × 高转化<br>合规 · 信任 · 转化</div>
+    </div>
+    <div class="callout reveal reveal-delay-2" style="margin-top:4vh;max-width:70vw">
+      <div class="q-big">合规、信任与高转化——三者兼得。</div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">「真实底色 + AI 提质」安全防封</div>
+    <div>STRATEGY 02 · SAFETY</div>
+  </div>
+</section>
+
+<!-- 15 · 策略三 light · GEO 关键词霸屏 -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 宣发篇</span></div>
+    <div class="right"><span>15 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="left:50%;top:55%;transform:translate(-50%,-50%);font-size:12vw;opacity:.05;letter-spacing:.3em">RANK</div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">STRATEGY 03</div>
+    <h1 class="h1-zh reveal" style="font-size:3.8vw;margin-bottom:5vh">GEO 同城关键词霸屏</h1>
+    <div class="grid-3" data-parallax style="align-content:center">
+      <div class="reveal" style="border:1px solid rgba(127,127,127,.32);padding:3.6vh 1.4vw;display:flex;flex-direction:column;align-items:center;gap:2vh;text-align:center">
+        <div style="display:flex;align-items:center;gap:1vw"><i data-lucide="hash" class="ico-md" style="opacity:.85"></i><div class="meta">01 · TITLE</div></div>
+        <div class="tag">视频标题</div>
+        <div style="font-family:var(--sans-zh);font-size:max(12px,.95vw);opacity:.66;line-height:1.6">植入「同城 + 品类 + 场景」核心词</div>
+      </div>
+      <div class="reveal reveal-delay-2" style="border:1px solid rgba(127,127,127,.32);padding:3.6vh 1.4vw;display:flex;flex-direction:column;align-items:center;gap:2vh;text-align:center">
+        <div style="display:flex;align-items:center;gap:1vw"><i data-lucide="eye" class="ico-md" style="opacity:.85"></i><div class="meta">02 · SEMANTIC</div></div>
+        <div class="tag">视觉语义</div>
+        <div style="font-family:var(--sans-zh);font-size:max(12px,.95vw);opacity:.66;line-height:1.6">植入「地域 + 品类」视觉语义</div>
+      </div>
+      <div class="reveal reveal-delay-3" style="border:1px solid rgba(127,127,127,.32);padding:3.6vh 1.4vw;display:flex;flex-direction:column;align-items:center;gap:2vh;text-align:center">
+        <div style="display:flex;align-items:center;gap:1vw"><i data-lucide="map-pin" class="ico-md" style="opacity:.85"></i><div class="meta">03 · LOCATION</div></div>
+        <div class="tag">发布定位</div>
+        <div style="font-family:var(--sans-zh);font-size:max(12px,.95vw);opacity:.66;line-height:1.6">挂载 POI 与同城话题标签</div>
+      </div>
+    </div>
+    <div class="callout reveal reveal-delay-3" style="margin-top:5vh;max-width:70vw">
+      <div class="q-big">同城搜索结果，全屏覆盖。</div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">GEO 同城关键词霸屏</div>
+    <div>STRATEGY 03 · GEO</div>
+  </div>
+</section>
+
+<!-- 16 · 策略四 light · 数据代差 -->
+<section class="slide light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 宣发篇</span></div>
+    <div class="right"><span>16 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="left:50%;top:53%;transform:translate(-50%,-50%);font-size:8vw;opacity:.05;letter-spacing:.34em">DELTA</div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">DATA · BEFORE vs AFTER</div>
+    <h1 class="h1-zh reveal" style="font-size:3.4vw;line-height:1.3;margin-bottom:6vh">数据代差 · 传统拍摄 vs AI 商业重构</h1>
+    <div class="grid-3" data-parallax>
+      <div class="stat reveal">
+        <span class="m"><i data-lucide="zap" class="ico-sm" style="vertical-align:-.15em;margin-right:.5em"></i>CAPACITY · 产能</span>
+        <span class="n" style="font-size:7vw">6.5<em style="font-size:.42em;font-style:normal;opacity:.55">×</em></span>
+        <span class="l">单条视频产能翻 6.5 倍，一天 30 条不重样</span>
+        <div style="margin-top:2.4vh;width:86%;height:5px;background:rgba(127,127,127,.16);border-radius:3px">
+          <div style="width:80%;height:100%;background:currentColor;border-radius:3px"></div>
+        </div>
+      </div>
+      <div class="stat reveal reveal-delay-2">
+        <span class="m"><i data-lucide="trending-down" class="ico-sm" style="vertical-align:-.15em;margin-right:.5em"></i>COST · 成本</span>
+        <span class="n" style="font-size:7vw">−97<em style="font-size:.42em;font-style:normal;opacity:.55">%</em></span>
+        <span class="l">单条制作成本压缩到 3%，预算花在刀刃上</span>
+        <div style="margin-top:2.4vh;width:86%;height:5px;background:rgba(127,127,127,.16);border-radius:3px">
+          <div style="width:32%;height:100%;background:currentColor;border-radius:3px"></div>
+        </div>
+      </div>
+      <div class="stat reveal reveal-delay-3">
+        <span class="m"><i data-lucide="ticket" class="ico-sm" style="vertical-align:-.15em;margin-right:.5em"></i>REDEMPTION · 核销率</span>
+        <span class="n" style="font-size:7vw">+258<em style="font-size:.42em;font-style:normal;opacity:.55">%</em></span>
+        <span class="l">同城核销率提升 2.5 倍，流量直接变成到店</span>
+        <div style="margin-top:2.4vh;width:86%;height:5px;background:rgba(127,127,127,.16);border-radius:3px">
+          <div style="width:100%;height:100%;background:currentColor;border-radius:3px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="callout reveal reveal-delay-3" style="margin-top:5vh;max-width:70vw">
+      <div class="q-big">不止是“更好用”，是碾压。</div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">数据代差 · 传统 vs AI</div>
+    <div>DATA · DELTA</div>
+  </div>
+</section>
+
+<!-- 17 · 作品集 hero light · 案例链接（24节气=抖音 / 反诈=本地视频 / 微电影=制作中） -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 作品集</span></div>
+    <div class="right"><span>17 / 20</span></div>
+  </div>
+  <div class="frame" data-parallax style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">PORTFOLIO · 用作品说话</div>
+    <h1 class="h1-zh reveal" style="font-size:4vw;margin-bottom:4.5vh">我们的 AI 视频作品</h1>
+    <div class="grid-3" style="align-content:center">
+      <div class="work-card reveal">
+        <i data-lucide="clapperboard" class="ico-lg"></i>
+        <div class="wc-t">24节气系列广告</div>
+        <div class="wc-s">节气节点营销</div>
+        <div class="wc-d">以 24 节气为轴，AI 重构四季风物，让每个节气都成为一次传播节点。</div>
+        <a href="https://www.douyin.com/video/7671277045842195078" data-video-link target="_blank" rel="noopener" class="wc-link">打开视频 ↗</a>
+      </div>
+      <div class="work-card reveal reveal-delay-2">
+        <i data-lucide="film" class="ico-lg"></i>
+        <div class="wc-t">政府合作反诈宣传</div>
+        <div class="wc-s">政务传播 · 寓教于乐</div>
+        <div class="wc-d">反诈主题 AI 短片，用强记忆的画面把安全意识讲进千家万户。</div>
+        <a href="videos/new-fanzha.mp4" data-video-link target="_blank" rel="noopener" class="wc-link">打开视频 ↗</a>
+      </div>
+      <div class="work-card reveal reveal-delay-3">
+        <i data-lucide="play-circle" class="ico-lg"></i>
+        <div class="wc-t">AI微电影</div>
+        <div class="wc-s">短片叙事 · 品牌故事</div>
+        <div class="wc-d">正在制作中的 AI 品牌微电影——从脚本到成片全 AI 流程，敬请期待。</div>
+        <span class="tag" aria-disabled="true" style="margin-top:auto;align-self:flex-start;opacity:.62;border-color:rgba(127,127,127,.55);cursor:not-allowed">制作中 · 敬请期待</span>
+      </div>
+    </div>
+    <div class="meta reveal reveal-delay-3" style="margin-top:4.5vh;text-align:center;align-self:center;opacity:.62">点击作品卡片即可打开视频 · 微电影制作中，敬请期待</div>
+  </div>
+  <div class="foot">
+    <div class="title">作品集 · Portfolio</div>
+    <div>PORTFOLIO · SHOWREEL</div>
+  </div>
+</section>
+
+<!-- 18 · 避坑 dark · 反差页 -->
+<section class="slide dark">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 避坑指南</span></div>
+    <div class="right"><span>18 / 20</span></div>
+  </div>
+  <div class="frame" style="display:flex;flex-direction:column;justify-content:center;min-height:80vh">
+    <div class="kicker reveal">PITFALLS · DON'T DIY</div>
+    <h1 class="h1-zh reveal" style="font-size:3.6vw;margin-bottom:6vh">避坑指南 · 为什么不要自己买软件试</h1>
+    <div class="grid-3" data-parallax>
+      <div class="pillar reveal" style="border:1px solid rgba(255,127,80,.6);padding:3.4vh 1.8vw">
+        <span class="tag" style="border-color:#FF7F50;color:#FF7F50;align-self:flex-start"><i data-lucide="alert-triangle" class="ico-sm" style="vertical-align:-.15em;margin-right:.5em"></i>DANGER</span>
+        <div class="t" style="margin-top:2.6vh">无物理逻辑</div>
+        <div class="d" style="margin-top:1vh">塑料感 + 恐怖谷<br>→ 顾客不信任</div>
+      </div>
+      <div class="pillar reveal reveal-delay-2" style="border:1px solid rgba(255,127,80,.6);padding:3.4vh 1.8vw">
+        <span class="tag" style="border-color:#FF7F50;color:#FF7F50;align-self:flex-start"><i data-lucide="alert-triangle" class="ico-sm" style="vertical-align:-.15em;margin-right:.5em"></i>DANGER</span>
+        <div class="t" style="margin-top:2.6vh">低质内容</div>
+        <div class="d" style="margin-top:1vh">平台低质处罚<br>→ 直接封号</div>
+      </div>
+      <div class="pillar reveal reveal-delay-3" style="border:1px solid rgba(255,127,80,.6);padding:3.4vh 1.8vw">
+        <span class="tag" style="border-color:#FF7F50;color:#FF7F50;align-self:flex-start"><i data-lucide="alert-triangle" class="ico-sm" style="vertical-align:-.15em;margin-right:.5em"></i>DANGER</span>
+        <div class="t" style="margin-top:2.6vh">试错成本</div>
+        <div class="d" style="margin-top:1vh">拿真实账号、流量<br>与口碑买单</div>
+      </div>
+    </div>
+    <div class="callout callout-final reveal reveal-delay-2" style="margin-top:5vh;max-width:76vw">
+      <span class="callout-src" style="color:#FF7F50;letter-spacing:.26em">LAST PITFALL · 别替平台交学费</span>
+      <div class="q-big">老板自己上手 = 用真实账号、流量和口碑，<span class="hi">替平台交一次学费</span>。</div>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">避坑指南 · Don't DIY</div>
+    <div>PITFALLS · WARNING</div>
+  </div>
+</section>
+
+<!-- 19 · 结尾 hero light -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left"><span>山西一山河 · 招商讲座 ｜ 收官</span></div>
+    <div class="right"><span>19 / 20</span></div>
+  </div>
+  <div class="frame" data-parallax style="display:grid;gap:3.6vh;align-content:center;min-height:80vh">
+    <div class="kicker reveal">CLOSING</div>
+    <h1 class="h-hero reveal" style="font-size:6.8vw;line-height:1.1">终极解法 ·<br>商业视觉外脑</h1>
+    <p class="lead reveal reveal-delay-2" style="max-width:62vw;font-size:1.6vw">老板不需要学 Prompt、不需要买高配算力——<span class="hi">我们负责把流量，变成到店的核销。</span></p>
+    <div class="reveal reveal-delay-3" style="border:1.5px solid currentColor;padding:2.8vh 2vw;max-width:66vw;display:flex;align-items:center;gap:2vw">
+      <span class="tag" style="flex-shrink:0">SIGN-UP · 试跑包</span>
+      <div>
+        <div style="font-family:var(--serif-zh);font-weight:600;font-size:max(16px,1.6vw);letter-spacing:.02em">「同城 AI 视觉爆破试跑包」现场锁额</div>
+        <div style="font-family:var(--sans-zh);font-weight:400;font-size:max(13px,1.05vw);opacity:.72;margin-top:.9vh">百万级 AI 视觉，帮门店吃尽同城流量。</div>
+      </div>
+    </div>
+    <div class="meta-row reveal reveal-delay-3">
+      <span>山西一山河文化传媒有限公司</span><span>·</span><span>主讲人 郭斌</span><span>·</span><span>现场签约 · 名额有限</span>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">山西一山河文化传媒有限公司</div>
+    <div style="display:flex;align-items:center;gap:1.4em;flex-wrap:wrap;justify-content:flex-end">
+      <span>作品集 · 点击图标播放</span>
+      <span style="opacity:.45">|</span>
+      <a href="https://www.douyin.com/video/7671277045842195078" data-video-link target="_blank" rel="noopener" aria-label="24节气系列广告 · 抖音视频" title="24节气系列广告 · 抖音视频" style="display:inline-flex;align-items:center"><i data-lucide="clapperboard" class="ico-sm"></i></a>
+      <a href="videos/new-fanzha.mp4" data-video-link target="_blank" rel="noopener" aria-label="政府合作反诈宣传 · 本地视频" title="政府合作反诈宣传 · 本地视频" style="display:inline-flex;align-items:center"><i data-lucide="film" class="ico-sm"></i></a>
+      <span aria-disabled="true" title="AI微电影 · 制作中，敬请期待" style="display:inline-flex;align-items:center;opacity:.35;cursor:not-allowed"><i data-lucide="play-circle" class="ico-sm"></i></span>
+      <span>SHANXI YISHANHE · CLOSING</span>
+    </div>
+  </div>
+</section>
+
+<!-- 20 · 感谢收尾 hero light · PPT 式谢谢页 -->
+<section class="slide hero light">
+  <div class="chrome">
+    <div class="left">
+      <img src="images/logo-black.png" alt="山西一山河文化传媒" style="height:22px;display:inline-block;vertical-align:middle">
+      <span style="font-family:var(--serif-zh);font-weight:600;font-size:14px;letter-spacing:.26em;text-transform:none;opacity:.95">山西一山河</span>
+      <span class="sep"></span>
+      <span>文化传媒 · 感谢观看</span>
+    </div>
+    <div class="right"><span>20 / 20</span></div>
+  </div>
+  <div class="ghost" aria-hidden="true" style="left:50%;top:52%;transform:translate(-50%,-50%);font-size:11vw;opacity:.05;letter-spacing:.16em;white-space:nowrap">THANKS</div>
+  <div class="deco-ring" style="right:7vw;top:16vh;width:20vh;height:20vh"></div>
+  <div class="deco-ring" style="left:7vw;bottom:15vh;width:14vh;height:14vh"></div>
+  <div class="frame" data-parallax style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:3vh;min-height:80vh;position:relative">
+    <div class="kicker reveal">THANK YOU · 收尾</div>
+    <h1 class="h1-zh reveal" style="font-size:6vw;line-height:1.1">谢谢观看</h1>
+    <h2 class="h-sub reveal reveal-delay-2" style="opacity:.62;font-size:2vw;letter-spacing:.02em">AI 视频重构同城商业 · 欢迎咨询洽谈</h2>
+    <div class="meta-row reveal reveal-delay-3" style="justify-content:center;margin-top:2.4vh">
+      <span>主讲人 郭斌</span><span>·</span><span>山西一山河文化传媒有限公司</span><span>·</span><span style="opacity:.5">[电话/微信占位]</span>
+    </div>
+  </div>
+  <div class="foot">
+    <div class="title">山西一山河文化传媒有限公司</div>
+    <div style="display:flex;align-items:center;gap:1.2em;flex-wrap:wrap;justify-content:flex-end">
+      <img src="images/logo-black.png" alt="" style="height:16px;opacity:.7">
+      <span>SHANXI YISHANHE · THANKS</span>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<div id="nav"></div>
+
+<script>
+/* =============== WebGL dual background ===============
+   Dark page: Holographic Dispersion (holographic dispersion · titanium undercurrent) —— rainbow perturbation, mouse radial ripple
+   Light page: Spiral Vortex (spiral vortex · silver pearl) —— domain-warp flow, no center
+   To change the style, see references/webgl-backgrounds.md
+*/
+const VS = `attribute vec2 position;void main(){gl_Position=vec4(position,0.0,1.0);}`;
+
+const FS_DARK = `precision highp float;
+uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;
+vec3 palette(float t,vec3 a,vec3 b,vec3 c,vec3 d){return a+b*cos(6.28318*(c*t+d));}
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_resolution.xy;
+  vec2 p=uv*2.0-1.0;p.x*=u_resolution.x/u_resolution.y;
+  vec2 m=u_mouse*2.0-1.0;m.x*=u_resolution.x/u_resolution.y;
+  float md=length(p-m);
+  float mr=sin(md*15.0-u_time*4.0)*exp(-md*3.0);p+=mr*0.08;
+  vec2 p0=p;
+  for(float i=1.0;i<4.0;i++){
+    p.x+=0.1/i*sin(i*3.0*p.y+u_time*0.4)+0.05;
+    p.y+=0.1/i*cos(i*2.0*p.x+u_time*0.3)-0.05;
+  }
+  float r=length(p);float ang=atan(p.y,p.x);
+  vec3 a=vec3(0.12,0.12,0.13);
+  vec3 b=vec3(0.03,0.04,0.05);
+  vec3 c=vec3(1.0,1.0,1.0);
+  vec3 d=vec3(0.1,0.2,0.4);
+  vec3 col=palette(r*1.5+p0.x*0.5+u_time*0.1,a,b,c,d);
+  float disp=sin(r*25.0-u_time*1.5+ang*2.0)*0.5+0.5;
+  col+=vec3(disp*0.015,disp*0.01,disp*0.02);
+  float hi=pow(sin(p.x*4.0+p.y*3.0+u_time)*0.5+0.5,8.0);
+  col+=hi*0.08;
+  vec3 base=vec3(0.05,0.05,0.06);
+  col=mix(base,col,0.85);
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const FS_LIGHT = `precision highp float;
+uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){
+  vec2 i=floor(p),f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1,0));
+  float c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+  vec2 u=f*f*(3.0-2.0*f);
+  return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;
+}
+float fbm(vec2 p){
+  float v=0.0,a=0.5;
+  mat2 m=mat2(0.80,0.60,-0.60,0.80);
+  for(int i=0;i<5;i++){v+=a*noise(p);p=m*p*2.02;a*=0.5;}
+  return v;
+}
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_resolution.xy;
+  vec2 p=uv;p.x*=u_resolution.x/u_resolution.y;
+  vec2 m=u_mouse;m.x*=u_resolution.x/u_resolution.y;
+  vec2 md=p-m;float dl=length(md);
+  p+=normalize(md+vec2(0.0001))*exp(-dl*5.0)*0.03;
+  vec2 q=vec2(fbm(p*1.8+u_time*0.07),fbm(p*1.8+vec2(5.2,1.3)+u_time*0.06));
+  vec2 r=vec2(fbm(p*2.0+q*1.3+vec2(1.7,9.2)+u_time*0.05),
+              fbm(p*2.0+q*1.3+vec2(8.3,2.8)+u_time*0.04));
+  float f=fbm(p*2.2+r*1.5);
+  vec3 silverDark=vec3(0.86,0.85,0.84);
+  vec3 paper=vec3(0.955,0.945,0.925);
+  vec3 col=mix(silverDark,paper,f);
+  float ph=r.x*2.2+u_time*0.35;
+  col+=vec3(0.78,0.62,0.92)*sin(ph)*0.055;
+  col+=vec3(0.55,0.72,0.95)*sin(ph*0.8+2.0)*0.05;
+  float hl=smoothstep(0.48,0.92,f);
+  col+=hl*0.06;
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const mouse={x:0.5,y:0.5};
+addEventListener('mousemove',e=>{mouse.x=e.clientX/innerWidth;mouse.y=e.clientY/innerHeight});
+
+function bootGL(canvasId, fsSrc){
+  const canvas=document.getElementById(canvasId);
+  const gl=canvas.getContext('webgl',{alpha:false,antialias:true});
+  if(!gl) return ()=>false;
+  const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);return sh};
+  const prog=gl.createProgram();
+  gl.attachShader(prog,mk(gl.VERTEX_SHADER,VS));
+  gl.attachShader(prog,mk(gl.FRAGMENT_SHADER,fsSrc));
+  gl.linkProgram(prog);gl.useProgram(prog);
+  const buf=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+  const pos=gl.getAttribLocation(prog,'position');
+  gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,2,gl.FLOAT,false,0,0);
+  const lRes=gl.getUniformLocation(prog,'u_resolution');
+  const lT=gl.getUniformLocation(prog,'u_time');
+  const lM=gl.getUniformLocation(prog,'u_mouse');
+  const resize=()=>{
+    const d=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=innerWidth*d;canvas.height=innerHeight*d;
+    gl.viewport(0,0,canvas.width,canvas.height);
+  };
+  addEventListener('resize',resize);resize();
+  return (tSec)=>{
+    gl.uniform2f(lRes,canvas.width,canvas.height);
+    gl.uniform1f(lT,tSec);
+    gl.uniform2f(lM,mouse.x,1-mouse.y);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    return true;
+  };
+}
+const drawDark=bootGL('bg-dark',FS_DARK);
+const drawLight=bootGL('bg-light',FS_LIGHT);
+const t0=Date.now();
+(function loop(){
+  const t=(Date.now()-t0)/1000;
+  drawDark(t);drawLight(t);
+  requestAnimationFrame(loop);
+})();
+
+// =============== Navigation (page flip / dots / keyboard / scroll wheel / touch) ===============
+const deck=document.getElementById('deck');
+const slides=deck.querySelectorAll('.slide');
+const nav=document.getElementById('nav');
+let idx=0,total=slides.length,lock=false;
+
+// Key: correct the deck width to total * 100vw, otherwise navigation will be misaligned
+deck.style.width=(total*100)+'vw';
+
+slides.forEach((s,i)=>{
+  const b=document.createElement('button');
+  b.className='dot';b.dataset.i=i;b.setAttribute('aria-label','Page '+(i+1));
+  b.onclick=()=>go(i);
+  nav.appendChild(b);
+});
+
+function go(n){
+  if(lock)return;
+  idx=Math.max(0,Math.min(total-1,n));
+  deck.style.transform=`translateX(${-idx*100}vw)`;
+  /* load-bearing: .slide.active is read by OpenDesign's host bridge
+     (src/runtime/srcdoc.ts findActiveByClass) to drive the slide counter.
+     No CSS targets it — do not remove. */
+  slides.forEach((s,i)=>s.classList.toggle('active',i===idx));
+  nav.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  /* Theme switch: read data-theme first, then infer from class (light/dark) */
+  const el=slides[idx];
+  const th=el.dataset.theme || (el.classList.contains('light')?'light':(el.classList.contains('dark')?'dark':'dark'));
+  document.body.classList.toggle('light-bg',th==='light');
+  lock=true;setTimeout(()=>lock=false,700);
+}
+
+/* =============== ESC index view =============== */
+let overviewOn=false;
+const ov=document.createElement('div');
+ov.id='overview';
+ov.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(var(--ink-rgb),.92);backdrop-filter:blur(12px);display:none;overflow-y:auto;padding:4vh 4vw';
+document.body.appendChild(ov);
+
+function buildOverview(){
+  ov.innerHTML='';
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:2vh 1.6vw;max-width:90vw;margin:0 auto';
+  slides.forEach((s,i)=>{
+    const card=document.createElement('div');
+    card.style.cssText='cursor:pointer;border-radius:6px;overflow:hidden;border:2px solid '+(i===idx?'rgba(var(--paper-rgb),.8)':'rgba(var(--paper-rgb),.15)')+';transition:border-color .2s';
+    card.onmouseenter=()=>card.style.borderColor='rgba(var(--paper-rgb),.6)';
+    card.onmouseleave=()=>card.style.borderColor=i===idx?'rgba(var(--paper-rgb),.8)':'rgba(var(--paper-rgb),.15)';
+    const wrap=document.createElement('div');
+    wrap.style.cssText='width:100%;aspect-ratio:16/9;overflow:hidden;position:relative;pointer-events:none;background:'+(s.classList.contains('light')?'var(--paper)':'var(--ink)');
+    const clone=s.cloneNode(true);
+    clone.style.cssText='width:100vw;height:100vh;transform:scale('+(1/4.5)+');transform-origin:top left;position:absolute;top:0;left:0;pointer-events:none';
+    wrap.appendChild(clone);
+    const label=document.createElement('div');
+    label.style.cssText='padding:6px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--paper);opacity:.7';
+    label.textContent=(i+1)+' / '+total;
+    card.appendChild(wrap);
+    card.appendChild(label);
+    card.onclick=()=>{toggleOverview();go(i)};
+    grid.appendChild(card);
+  });
+  ov.appendChild(grid);
+}
+
+function toggleOverview(){
+  overviewOn=!overviewOn;
+  if(overviewOn){buildOverview();ov.style.display='block';}
+  else{ov.style.display='none';}
+}
+
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();toggleOverview();return;}
+  if(overviewOn)return;
+  if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '||e.key==='ArrowDown')go(idx+1);
+  if(e.key==='ArrowLeft'||e.key==='PageUp'||e.key==='ArrowUp')go(idx-1);
+  if(e.key==='Home')go(0);
+  if(e.key==='End')go(total-1);
+});
+
+let wheelTO=null,wheelAcc=0;
+addEventListener('wheel',e=>{
+  wheelAcc+=e.deltaY+e.deltaX;
+  if(Math.abs(wheelAcc)>50){go(idx+(wheelAcc>0?1:-1));wheelAcc=0;}
+  clearTimeout(wheelTO);wheelTO=setTimeout(()=>wheelAcc=0,150);
+},{passive:true});
+
+let tx=0,ty=0;
+addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
+addEventListener('touchend',e=>{
+  const dx=(e.changedTouches[0].clientX-tx);
+  const dy=(e.changedTouches[0].clientY-ty);
+  if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy))go(idx+(dx<0?1:-1));
+},{passive:true});
+
+go(0);
+</script>
+<script>
+/* =============== Premium restrained FX (appended · single delegation, no re-binding) =============== */
+(function(){
+  'use strict';
+  var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- 1. 3D tilt cards: ONE delegated pointermove on document (active slide only) ---- */
+  var TILT_MAX = 3.5, tiltEl = null, tiltTimer = 0;
+  function tiltLeave(){
+    if(!tiltEl) return;
+    var el = tiltEl;
+    el.classList.remove('tilt-active');
+    el.classList.add('tilt-leave');
+    el.style.transform = '';
+    tiltEl = null;
+    clearTimeout(tiltTimer);
+    tiltTimer = setTimeout(function(){ el.classList.remove('tilt-3d'); el.classList.remove('tilt-leave'); el.style.willChange = ''; }, 650);
+  }
+  document.addEventListener('pointermove', function(e){
+    if(RM || e.pointerType === 'touch') return;
+    var t = e.target;
+    var card = (t && t.closest) ? t.closest('.frame-img,.pillar,.step,.callout,.stat-card,.plat,.work-card') : null;
+    if(!card || card.closest('#overview') || !card.closest('.slide.active')){
+      if(tiltEl) tiltLeave();
+      return;
+    }
+    if(tiltEl && tiltEl !== card) tiltLeave();
+    if(!tiltEl){
+      tiltEl = card;
+      card.classList.add('tilt-3d', 'tilt-active');
+      card.style.willChange = 'transform';
+    }
+    var r = card.getBoundingClientRect();
+    if(!r.width || !r.height) return;
+    var px = (e.clientX - r.left) / r.width - 0.5;
+    var py = (e.clientY - r.top) / r.height - 0.5;
+    card.style.transform = 'perspective(1200px) rotateX(' + (-py * TILT_MAX).toFixed(2) + 'deg) rotateY(' + (px * TILT_MAX).toFixed(2) + 'deg) translateZ(6px)';
+  }, {passive:true});
+  document.addEventListener('pointerdown', function(){ if(tiltEl) tiltLeave(); }, true);
+
+  /* ---- 2. Page-switch parallax: CSS-driven; JS only assigns the stagger delay --pd ---- */
+  function applyParallax(){
+    var slides = document.querySelectorAll('#deck .slide');
+    for(var i = 0; i < slides.length; i++){
+      var els = slides[i].querySelectorAll('[data-parallax]');
+      for(var j = 0; j < els.length; j++){ els[j].style.setProperty('--pd', (0.06 + j * 0.09).toFixed(2) + 's'); }
+    }
+  }
+
+  /* ---- 3. Hook slide changes (observer on .slide class toggles: covers flip/dots/keys/touch/ESC) ---- */
+  var deck = document.getElementById('deck');
+  var obs = new MutationObserver(function(muts){
+    for(var i = 0; i < muts.length; i++){
+      var m = muts[i];
+      if(m.type === 'attributes' && m.target.classList && m.target.classList.contains('slide')){
+        if(tiltEl) tiltLeave();
+        applyParallax();
+        return;
+      }
+    }
+  });
+  if(deck) obs.observe(deck, {subtree: true, attributes: true, attributeFilter: ['class']});
+
+  applyParallax();
+})();
+/* ============ Richer entrance stagger + restrained ambient follow (appended) ============ */
+(function(){
+  'use strict';
+  var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var deck = document.getElementById('deck');
+  if(!deck) return;
+
+  /* 1) Fine-grained one-time entrance for the active slide's .reveal chain,
+        staggered in DOM order (kicker → title → subtitle → body → figure →
+        callout → foot) at ~0.08s steps, capped so the whole sequence lands
+        within ~0.9s. Inline delay overrides the coarse .reveal-delay-* classes.
+        Under reduced-motion nothing is delayed (CSS makes it instant). */
+  function staggerSlide(slide){
+    var els = slide.querySelectorAll('.reveal');
+    for(var i = 0; i < els.length; i++){
+      els[i].style.transitionDelay = Math.min(0.86, 0.06 + i * 0.08).toFixed(2) + 's';
+    }
+  }
+  function findActive(){
+    var slides = deck.querySelectorAll('.slide');
+    for(var i = 0; i < slides.length; i++){ if(slides[i].classList.contains('active')) return slides[i]; }
+    return null;
+  }
+  if(!RM) staggerSlide(findActive());
+  if(!RM){
+    new MutationObserver(function(muts){
+      for(var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        if(m.type === 'attributes' && m.target.classList && m.target.classList.contains('slide')){
+          var a = findActive();
+          if(a) staggerSlide(a);
+          return;
+        }
+      }
+    }).observe(deck, {subtree:true, attributes:true, attributeFilter:['class']});
+  }
+
+  /* 2) #ambient-glow drifts a hair toward the pointer — glided by the CSS
+        transition (1.4s), so no animation loop is needed. */
+  var glow = document.getElementById('ambient-glow');
+  if(glow && !RM){
+    addEventListener('mousemove', function(e){
+      var nx = (e.clientX / innerWidth) - 0.5;   /* -0.5..0.5 */
+      var ny = (e.clientY / innerHeight) - 0.5;
+      glow.style.transform = 'translate(' + (nx * 6).toFixed(2) + 'vw,' + (ny * 5).toFixed(2) + 'vh)';
+    }, {passive:true});
+  }
+})();
+</script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>lucide.createIcons();</script>
+<script>
+/* ============ Three.js per-slide 3D motifs (re-added · one renderer, scenes switched by .slide.active) ============
+   Discipline: slow motion (18–60s cycles), low opacity (≤0.4), wireframe / points / lines, no flashing.
+   One renderer + ONE canvas (the cover's .three-motif) re-parented to the active slide.
+   Mouse parallax applies only while a slide is active and slight; loop pauses when flipped away /
+   tab hidden / ESC overview; prefers-reduced-motion renders a single static frame per slide. */
+(function(){
+  'use strict';
+
+  function loadScript(src, ok){
+    var s=document.createElement('script');
+    s.src=src;
+    s.onload=function(){ ok(true); };
+    s.onerror=function(){ ok(false); };
+    document.head.appendChild(s);
+  }
+  function boot(){ if(window.THREE) main(window.THREE); }
+
+  loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js', function(a){
+    if(a){ boot(); } else { loadScript('https://unpkg.com/three@0.128.0/build/three.min.js', function(b){ if(b) boot(); }); }
+  });
+
+  function main(T){
+    var slides=Array.prototype.slice.call(document.querySelectorAll('#deck .slide'));
+    var deck=document.getElementById('deck');
+    var canvas=document.querySelector('canvas.three-motif');
+    var overview=document.getElementById('overview');
+    if(!canvas||!deck||!slides.length) return;
+
+    var RM=!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);
+    var overviewOpen=function(){ return !!(overview && overview.style.display!=='none'); };
+
+    var CYAN=0x36d8e8, INDIGO=0x0a1f3d, WHITE=0xffffff, CORAL=0xff7f50, AMBER=0xffc46b;
+
+    /* ---------- tiny geometry / material helpers ---------- */
+    function ptsGeo(arr){
+      var g=new T.BufferGeometry();
+      g.setAttribute('position',new T.Float32BufferAttribute(arr,3));
+      return g;
+    }
+    function colAttr(g,col){ g.setAttribute('color',new T.Float32BufferAttribute(col,3)); return g; }
+    function points(geo,color,size,opacity,map){
+      var m=new T.PointsMaterial({color:color,size:size,sizeAttenuation:true,transparent:true,opacity:opacity,blending:T.NormalBlending,depthWrite:false});
+      if(geo.getAttribute('color')) m.vertexColors=true;
+      if(map){ m.map=map; m.alphaTest=0.01; }
+      return new T.Points(geo,m);
+    }
+    function segs(pairs,color,opacity){
+      return new T.LineSegments(ptsGeo(pairs),new T.LineBasicMaterial({color:color,transparent:true,opacity:opacity,blending:T.NormalBlending,depthWrite:false}));
+    }
+    function loopPts(pts,color,opacity){
+      return new T.LineLoop(ptsGeo(pts),new T.LineBasicMaterial({color:color,transparent:true,opacity:opacity,blending:T.NormalBlending,depthWrite:false}));
+    }
+    function edges(geom,color,opacity){
+      return new T.LineSegments(new T.EdgesGeometry(geom),new T.LineBasicMaterial({color:color,transparent:true,opacity:opacity,blending:T.NormalBlending,depthWrite:false}));
+    }
+    function circleXY(r,n){ var o=[],a; for(var i=0;i<n;i++){ a=i/n*Math.PI*2; o.push(Math.cos(a)*r,Math.sin(a)*r,0); } return o; }
+    function circleYZ(r,n){ var o=[],a; for(var i=0;i<n;i++){ a=i/n*Math.PI*2; o.push(0,Math.sin(a)*r,Math.cos(a)*r); } return o; }
+    function glowTex(){
+      var c=document.createElement('canvas'); c.width=c.height=64;
+      var x=c.getContext('2d');
+      var grd=x.createRadialGradient(32,32,0,32,32,32);
+      grd.addColorStop(0,'rgba(255,255,255,0.9)');
+      grd.addColorStop(0.35,'rgba(255,255,255,0.32)');
+      grd.addColorStop(1,'rgba(255,255,255,0)');
+      x.fillStyle=grd; x.fillRect(0,0,64,64);
+      return new T.CanvasTexture(c);
+    }
+    var ZERO_V={x:0,y:0,z:0};
+
+    /* ============ 1 · Cover — dimmed constellation backdrop (particle logo is the focus) ============ */
+    function buildCover(){
+      var g=new T.Group();
+      var N=650, pos=[], col=[], i;
+      var cCyan=new T.Color(CYAN), cInd=new T.Color(INDIGO), tmp=new T.Color();
+      for(i=0;i<N;i++){
+        var r=Math.pow(Math.random(),0.62)*6.4;
+        var th=Math.random()*Math.PI*2, ph=Math.acos(2*Math.random()-1);
+        pos.push(r*Math.sin(ph)*Math.cos(th), r*Math.sin(ph)*Math.sin(th), r*Math.cos(ph));
+        tmp.copy(cInd).lerp(cCyan,Math.min(1,r/6.4));
+        col.push(tmp.r,tmp.g,tmp.b);
+      }
+      g.add(points(colAttr(ptsGeo(pos),col),CYAN,0.12,0.2));
+      var seg=[], tries=0;
+      while(seg.length<360 && tries<N*8){
+        tries++;
+        var a=(Math.random()*N)|0, b=(Math.random()*N)|0;
+        if(a===b) continue;
+        var dx=pos[a*3]-pos[b*3], dy=pos[a*3+1]-pos[b*3+1], dz=pos[a*3+2]-pos[b*3+2];
+        if(dx*dx+dy*dy+dz*dz<9.0) seg.push(pos[a*3],pos[a*3+1],pos[a*3+2],pos[b*3],pos[b*3+1],pos[b*3+2]);
+      }
+      if(seg.length) g.add(segs(seg,CYAN,0.1));
+      g.add(edges(new T.IcosahedronGeometry(3.3,0),CYAN,0.16));
+      var inner=new T.Group();
+      inner.add(edges(new T.OctahedronGeometry(2.0,0),WHITE,0.1));
+      g.add(inner);
+      g.userData.spin={x:0.06,y:0.12,z:0.02};
+      g.userData.bob=0.3;
+      g.userData.update=function(t){ inner.rotation.y=-t*0.18; };
+      g.scale.set(0.82,0.82,0.82);
+      g.position.z=-1.4;
+      return g;
+    }
+
+    /* ============ 2 · Act I — neural network / brain circuit ============ */
+    function buildNeural(){
+      var g=new T.Group();
+      var layers=[[],[],[]], seeds=[8,11,8], i,j;
+      for(j=0;j<3;j++){
+        for(i=0;i<seeds[j];i++){
+          var a=i/seeds[j]*Math.PI*2+j*0.7;
+          var rr=3.2+(Math.random()-0.5)*1.6;
+          layers[j].push([Math.cos(a)*rr,(Math.random()-0.5)*2.2,(j-1)*2.1+(Math.random()-0.5)*0.6]);
+        }
+      }
+      var pos=[];
+      for(j=0;j<3;j++){ for(i=0;i<layers[j].length;i++){ pos.push(layers[j][i][0],layers[j][i][1],layers[j][i][2]); } }
+      var link=[];
+      function linkLayers(A,B,cnt){
+        for(var k=0;k<cnt;k++){
+          var a=(Math.random()*A.length)|0, b=(Math.random()*B.length)|0;
+          link.push(A[a][0],A[a][1],A[a][2],B[b][0],B[b][1],B[b][2]);
+        }
+      }
+      linkLayers(layers[0],layers[1],26);
+      linkLayers(layers[1],layers[2],30);
+      g.add(points(ptsGeo(pos),CYAN,0.2,0.55));
+      g.add(segs(link,WHITE,0.26));
+      g.userData.spin={y:0.14};
+      g.userData.bob=0.25;
+      g.scale.set(1.35,1.35,1.35);
+      return g;
+    }
+
+    /* ============ 3 · Three eras — three connected orbital spheres (AI carries glow) ============ */
+    function buildEras(){
+      var g=new T.Group();
+      var xs=[-4.6,0,4.6], eras=[], i;
+      for(i=0;i<3;i++){
+        var eg=new T.Group();
+        var r=1.05;
+        eg.add(edges(new T.IcosahedronGeometry(r,0),i===2?CYAN:WHITE,i===2?0.32:(i===1?0.24:0.18)));
+        var ring=loopPts(circleXY(1.8,48),i===2?CYAN:WHITE,0.14);
+        ring.rotation.x=Math.PI/2.4;
+        var dots=points(ptsGeo(circleXY(1.8,20)),i===2?CYAN:WHITE,0.07,0.3);
+        dots.rotation.x=Math.PI/2.4;
+        eg.add(ring); eg.add(dots);
+        if(i===2){
+          var sd=[];
+          for(var k=0;k<26;k++){ var u=Math.random()*Math.PI*2, v=Math.acos(2*Math.random()-1); sd.push(Math.sin(v)*Math.cos(u)*r*1.02,Math.sin(v)*Math.sin(u)*r*1.02,Math.cos(v)*r*1.02); }
+          eg.add(points(ptsGeo(sd),CYAN,0.09,0.4));
+          eg.add(points(ptsGeo([0,0,0]),AMBER,0.5,0.35));
+        }
+        eg.position.x=xs[i];
+        eras.push({ring:ring,dots:dots});
+        g.add(eg);
+      }
+      g.add(segs([-4.6,0,0,4.6,0,0],WHITE,0.12));
+      g.userData.eras=eras;
+      g.userData.spin={y:0.08};
+      g.userData.bob=0.2;
+      g.userData.update=function(t){
+        eras[0].ring.rotation.z=t*0.1;   eras[0].dots.rotation.z=t*0.1;
+        eras[1].ring.rotation.z=-t*0.13; eras[1].dots.rotation.z=-t*0.13;
+        eras[2].ring.rotation.z=t*0.18;  eras[2].dots.rotation.z=t*0.18;
+      };
+      return g;
+    }
+
+    /* ============ 4 · Case evolution — flat static polygon (old) vs bursting wireframe (new) ============ */
+    function buildEvolve(){
+      var g=new T.Group();
+      var old=new T.Group();
+      var flat=edges(new T.OctahedronGeometry(2.3,0),WHITE,0.2);
+      flat.scale.set(1,0.07,1);
+      old.add(flat);
+      old.position.set(-4.4,0.5,0);
+      g.add(old);
+      var neo=new T.Group();
+      neo.add(edges(new T.IcosahedronGeometry(2.1,1),CYAN,0.3));
+      neo.position.set(4.4,0.5,0);
+      g.add(neo);
+      var shardAngles=[];
+      for(var i=0;i<16;i++){ shardAngles.push({u:Math.random()*Math.PI*2,v:Math.acos(2*Math.random()-1),ph:Math.random()*6.28}); }
+      var sh=points(ptsGeo(new Array(48).fill(0)),CYAN,0.09,0.32);
+      g.add(sh);
+      g.userData.sh=sh;
+      g.userData.shardAngles=shardAngles;
+      g.userData.spin={y:0.09};
+      g.userData.bob=0.2;
+      g.userData.update=function(t){
+        neo.rotation.y=t*0.25;
+        var arr=sh.geometry.attributes.position.array;
+        for(var i=0;i<16;i++){
+          var d=1.5+((t*0.05+shardAngles[i].ph)%1)*2.0;
+          var u=shardAngles[i].u, v=shardAngles[i].v;
+          arr[i*3]=Math.sin(v)*Math.cos(u)*d;
+          arr[i*3+1]=Math.sin(v)*Math.sin(u)*d;
+          arr[i*3+2]=Math.cos(v)*d;
+        }
+        sh.geometry.attributes.position.needsUpdate=true;
+      };
+      return g;
+    }
+
+    /* ============ 5 · Act II — wireframe icosahedron + grid sphere ============ */
+    function buildTech(){
+      var g=new T.Group();
+      g.add(edges(new T.IcosahedronGeometry(2.7,1),CYAN,0.38));
+      var wg=new T.WireframeGeometry(new T.SphereGeometry(2.0,10,7));
+      g.add(new T.LineSegments(wg,new T.LineBasicMaterial({color:WHITE,transparent:true,opacity:0.2,blending:T.NormalBlending,depthWrite:false})));
+      g.add(points(ptsGeo(circleXY(3.4,40)),CYAN,0.08,0.4));
+      g.userData.spin={x:0.08,y:0.12,z:0.05};
+      g.userData.bob=0.3;
+      g.scale.set(1.4,1.4,1.4);
+      return g;
+    }
+
+    /* ============ 6 · Physics — fluid particle stream (cheese pull) ============ */
+    function buildFluid(){
+      var g=new T.Group();
+      var curve=new T.CatmullRomCurve3([
+        new T.Vector3(-5,0.4,0), new T.Vector3(-3,1.8,0.5), new T.Vector3(-1,0.6,0.2),
+        new T.Vector3(1,2.0,-0.3), new T.Vector3(3,0.8,0.4), new T.Vector3(5,1.6,0)
+      ]);
+      var N=170, pos=[], col=[], i;
+      var cCyan=new T.Color(CYAN), cWhite=new T.Color(WHITE), tmp=new T.Color();
+      for(i=0;i<N;i++){
+        var v=curve.getPoint(i/N);
+        pos.push(v.x+(Math.random()-0.5)*0.35,v.y+(Math.random()-0.5)*0.3,v.z+(Math.random()-0.5)*0.3);
+        tmp.copy(cCyan).lerp(cWhite,(i/N)*0.6);
+        col.push(tmp.r,tmp.g,tmp.b);
+      }
+      var pts=points(colAttr(ptsGeo(pos),col),CYAN,0.13,0.34);
+      g.add(pts);
+      var lp=curve.getPoints(80), lf=[];
+      for(i=0;i<lp.length-1;i++){ lf.push(lp[i].x,lp[i].y,lp[i].z,lp[i+1].x,lp[i+1].y,lp[i+1].z); }
+      g.add(segs(lf,WHITE,0.1));
+      g.userData.pts=pts;
+      g.userData.curve=curve;
+      g.userData.N=N;
+      g.userData.spin={y:0.06};
+      g.userData.update=function(t){
+        var arr=pts.geometry.attributes.position.array;
+        var off=(t*0.05)%1;
+        for(var i=0;i<N;i++){
+          var v=curve.getPoint(((i/N)+off)%1);
+          arr[i*3]=v.x; arr[i*3+1]=v.y; arr[i*3+2]=v.z;
+        }
+        pts.geometry.attributes.position.needsUpdate=true;
+      };
+      return g;
+    }
+
+    /* ============ 7 · Subject — chain of identical wireframe nodes ============ */
+    function buildChain(){
+      var g=new T.Group();
+      var n=7, nodes=[], i;
+      for(i=0;i<n;i++){
+        var x=-5+i*(10/(n-1));
+        var sub=new T.Group();
+        sub.add(edges(new T.BoxGeometry(0.75,0.75,0.75),CYAN,0.28));
+        sub.position.set(x,Math.sin(x*0.5)*1.1,Math.cos(x*0.35)*0.7);
+        nodes.push(sub);
+        g.add(sub);
+      }
+      var links=[];
+      for(i=0;i<n-1;i++){
+        links.push(nodes[i].position.x,nodes[i].position.y,nodes[i].position.z,
+                    nodes[i+1].position.x,nodes[i+1].position.y,nodes[i+1].position.z);
+      }
+      g.add(segs(links,WHITE,0.2));
+      g.userData.nodes=nodes;
+      g.userData.spin={y:0.09};
+      g.userData.bob=0.2;
+      g.userData.update=function(t){
+        for(var i=0;i<n;i++){
+          nodes[i].rotation.x=t*(0.1+i*0.012);
+          nodes[i].rotation.y=t*(0.14+i*0.01);
+        }
+      };
+      return g;
+    }
+
+    /* ============ 8 · Emotion — 4 soft glow orbs, very slow hue shift ============ */
+    function buildEmotion(){
+      var g=new T.Group();
+      var tex=glowTex();
+      var cols=[CYAN,CORAL,AMBER,WHITE];
+      var spots=[[3.4,1.8,0.4],[4.2,0.2,0],[3.1,-1.4,0.5],[4.6,-2.0,0]];
+      var orbs=[];
+      for(var i=0;i<4;i++){
+        var grp=new T.Group();
+        grp.position.set(spots[i][0],spots[i][1],spots[i][2]);
+        var p=points(ptsGeo([0,0,0]),cols[i],2.0,0.3,tex);
+        grp.add(p);
+        grp.add(points(ptsGeo([0,0,0]),WHITE,0.3,0.4));
+        g.add(grp);
+        orbs.push({grp:grp,mat:p.material,base:cols[i],spot:spots[i]});
+      }
+      g.userData.orbs=orbs;
+      g.userData.spin={y:0.05};
+      g.userData.bob=0.3;
+      g.userData.update=function(t){
+        for(var i=0;i<orbs.length;i++){
+          var o=orbs[i];
+          o.mat.color.setHex(o.base).offsetHSL(Math.sin(t*0.12+i*1.6)*0.06,0,0);
+          o.grp.position.y=o.spot[1]+Math.sin(t*0.3+i*1.3)*0.18;
+        }
+      };
+      return g;
+    }
+
+    /* ============ 9 · GEO — wireframe cube + orbit rings + dots ============ */
+    function buildGeo(){
+      var g=new T.Group();
+      g.add(edges(new T.BoxGeometry(2.5,2.5,2.5),CYAN,0.36));
+      var r1=loopPts(circleXY(2.1,48),WHITE,0.2); r1.rotation.x=Math.PI/2.2;
+      var r2=loopPts(circleXY(2.9,48),CYAN,0.18); r2.rotation.x=Math.PI/1.6; r2.rotation.y=0.4;
+      var p1=points(ptsGeo(circleXY(2.1,16)),WHITE,0.08,0.42); p1.rotation.x=Math.PI/2.2;
+      var p2=points(ptsGeo(circleXY(2.9,16)),CYAN,0.08,0.42); p2.rotation.x=Math.PI/1.6; p2.rotation.y=0.4;
+      g.add(r1); g.add(r2); g.add(p1); g.add(p2);
+      g.userData.rings=[r1,p1,r2,p2];
+      g.userData.spin={x:0.08,y:0.13,z:0.04};
+      g.userData.bob=0.25;
+      g.scale.set(1.25,1.25,1.25);
+      g.userData.update=function(t){
+        g.userData.rings[0].rotation.z=t*0.2;
+        g.userData.rings[1].rotation.z=t*0.2;
+        g.userData.rings[2].rotation.z=-t*0.15;
+        g.userData.rings[3].rotation.z=-t*0.15;
+      };
+      return g;
+    }
+
+    /* ============ 10 · Act III — rising steps / growth path ============ */
+    function buildSteps(){
+      var g=new T.Group();
+      var hs=[0.7,1.25,1.85,2.5,3.3];
+      for(var i=0;i<5;i++){
+        var x=-4+i*2;
+        var e=edges(new T.BoxGeometry(1.25,hs[i],1.25),i===4?CYAN:WHITE,i===4?0.42:0.3);
+        e.position.set(x,hs[i]/2,0);
+        g.add(e);
+        g.add(points(ptsGeo([x,hs[i]+0.05,0]),i===4?CYAN:WHITE,i===4?0.2:0.14,0.45));
+      }
+      g.userData.spin={y:0.1};
+      g.userData.bob=0.15;
+      g.scale.set(1.3,1.3,1.3);
+      return g;
+    }
+
+    /* ============ 11 · Monetization — 4 nodes funnel into 1 conversion node ============ */
+    function buildFunnel(){
+      var g=new T.Group();
+      var srcs=[[-3,2.6,0],[-1,2.6,0],[1,2.6,0],[3,2.6,0]];
+      var dst=[0,-2.4,0], i;
+      var nodeGeo=new T.SphereGeometry(0.2,12,8);
+      for(i=0;i<4;i++){
+        var n=new T.Mesh(nodeGeo,new T.MeshBasicMaterial({color:CYAN,transparent:true,opacity:0.4,blending:T.NormalBlending,depthWrite:false}));
+        n.position.set(srcs[i][0],srcs[i][1],srcs[i][2]);
+        g.add(n);
+      }
+      var conv=new T.Mesh(new T.SphereGeometry(0.3,12,8),new T.MeshBasicMaterial({color:AMBER,transparent:true,opacity:0.4,blending:T.NormalBlending,depthWrite:false}));
+      conv.position.set(0,-2.4,0);
+      g.add(conv);
+      var links=[];
+      for(i=0;i<4;i++){ links.push(srcs[i][0],srcs[i][1],srcs[i][2],dst[0],dst[1],dst[2]); }
+      g.add(segs(links,WHITE,0.18));
+      var fp=[], fcol=[];
+      var cCyan=new T.Color(CYAN), cAmber=new T.Color(AMBER), tmp=new T.Color();
+      for(i=0;i<32;i++){
+        fp.push(0,0,0);
+        tmp.copy(cCyan).lerp(cAmber,(i%8)/8);
+        fcol.push(tmp.r,tmp.g,tmp.b);
+      }
+      var flow=points(colAttr(ptsGeo(fp),fcol),CYAN,0.1,0.4);
+      g.add(flow);
+      g.userData.flow=flow;
+      g.userData.srcs=srcs;
+      g.userData.dst=dst;
+      g.userData.spin={y:0.08};
+      g.userData.bob=0.2;
+      g.userData.update=function(t){
+        var arr=flow.geometry.attributes.position.array;
+        for(var i=0;i<32;i++){
+          var lineIdx=(i/8)|0;
+          var p=((i%8)/8+(t*0.06)%1)%1;
+          arr[i*3]=srcs[lineIdx][0]+(dst[0]-srcs[lineIdx][0])*p;
+          arr[i*3+1]=srcs[lineIdx][1]+(dst[1]-srcs[lineIdx][1])*p;
+          arr[i*3+2]=srcs[lineIdx][2]+(dst[2]-srcs[lineIdx][2])*p;
+        }
+        flow.geometry.attributes.position.needsUpdate=true;
+      };
+      return g;
+    }
+
+    /* ============ 12 · Act IV — radar / broadcast: expanding rings + dots ============ */
+    function buildRadar(){
+      var g=new T.Group();
+      var rings=[], i;
+      for(i=0;i<3;i++){ var r=loopPts(circleXY(1.7+i*1.35,56),WHITE,0.26); g.add(r); rings.push(r); }
+      var spokes=[];
+      for(i=0;i<4;i++){ var a=i*Math.PI/2; spokes.push(Math.cos(a)*0.2,Math.sin(a)*0.2,0,Math.cos(a)*5.5,Math.sin(a)*5.5,0); }
+      g.add(segs(spokes,WHITE,0.16));
+      var dotPos=[];
+      for(i=0;i<3;i++) dotPos.push(1.7+i*1.35,0,0);
+      var dots=points(ptsGeo(dotPos),CYAN,0.14,0.5);
+      g.add(dots);
+      g.add(points(ptsGeo([0,0,0]),CYAN,0.36,0.55));
+      g.userData.rings=rings;
+      g.userData.dots=dots;
+      g.userData.spin={y:0.05};
+      g.userData.bob=0.15;
+      g.userData.update=function(t){
+        for(var i=0;i<3;i++){
+          var s=1+0.1*Math.sin(t*0.2+i*1.2);
+          rings[i].scale.set(s,s,s);
+        }
+        var arr=dots.geometry.attributes.position.array;
+        for(i=0;i<3;i++){
+          var a=t*(0.25+0.06*i)+i*2.1;
+          arr[i*3]=Math.cos(a)*(1.7+i*1.35);
+          arr[i*3+1]=Math.sin(a)*(1.7+i*1.35);
+        }
+        dots.geometry.attributes.position.needsUpdate=true;
+      };
+      return g;
+    }
+
+    /* ============ 13 · Matrix — 1 point → 30 points fan out (one-time on activation) ============ */
+    function buildMatrix(){
+      var g=new T.Group();
+      var home=[], i;
+      for(i=0;i<30;i++){
+        var a=-1.05+i*(2.1/29)+(Math.random()-0.5)*0.12;
+        var r=4.6+Math.random()*1.6;
+        home.push(Math.sin(a)*r,(Math.random()-0.5)*1.6,Math.cos(a)*r*0.9);
+      }
+      var fan=points(ptsGeo(home.slice()),WHITE,0.11,0.3);
+      g.add(fan);
+      g.add(points(ptsGeo([0,0,0]),CYAN,0.45,0.4));
+      var arc=[];
+      for(i=0;i<30;i++){ var a=-1.05+i*(2.1/29); arc.push(Math.sin(a)*6.2,0,Math.cos(a)*6.2*0.9); }
+      g.add(loopPts(arc,WHITE,0.12));
+      g.userData.fan=fan;
+      g.userData.home=home;
+      g.userData.spread=1;
+      g.userData.spin={y:0.09};
+      g.userData.bob=0.15;
+      g.userData.update=function(t){
+        if(g.userData.spread<1){
+          g.userData.spread=Math.min(1,g.userData.spread+0.02);
+          var e=1-Math.pow(1-g.userData.spread,3);
+          var arr=fan.geometry.attributes.position.array;
+          for(var i=0;i<30;i++){
+            arr[i*3]=home[i*3]*e;
+            arr[i*3+1]=home[i*3+1]*e;
+            arr[i*3+2]=home[i*3+2]*e;
+          }
+          fan.geometry.attributes.position.needsUpdate=true;
+        }
+      };
+      return g;
+    }
+
+    /* ============ 14 · Safety — two interlocking rings (real + AI) ============ */
+    function buildSafety(){
+      var g=new T.Group();
+      var r1=loopPts(circleXY(2.0,64),CYAN,0.42);
+      var r2=loopPts(circleYZ(2.0,64),WHITE,0.3);
+      r2.rotation.x=1.2;
+      g.add(r1); g.add(r2);
+      g.add(points(ptsGeo([0,0,0]),CYAN,0.38,0.5));
+      g.userData.r2=r2;
+      g.userData.spin={y:0.09};
+      g.userData.bob=0.15;
+      g.scale.set(1.2,1.2,1.2);
+      g.userData.update=function(t){ r2.rotation.z=t*0.12; };
+      return g;
+    }
+
+    /* ============ 15 · GEO wall — glowing keyword tile grid ============ */
+    function buildTiles(){
+      var g=new T.Group();
+      var cols=[CYAN,WHITE,INDIGO], k=0;
+      for(var row=0;row<6;row++){
+        for(var c=0;c<9;c++){
+          var m=new T.Mesh(new T.PlaneGeometry(0.6,0.34),
+            new T.MeshBasicMaterial({color:cols[(row+c)%3],transparent:true,opacity:(k%5===0?0.42:0.24),blending:T.NormalBlending,depthWrite:false,side:T.DoubleSide}));
+          m.position.set((c-4)*0.72,(2.5-row)*0.55,(Math.random()-0.5)*0.5);
+          m.rotation.y=(Math.random()-0.5)*0.15;
+          g.add(m);
+          k++;
+        }
+      }
+      g.userData.spin={y:0.07};
+      g.userData.bob=0.2;
+      g.scale.set(1.15,1.15,1.15);
+      return g;
+    }
+
+    /* ============ 16 · Data delta — rising 3D bars, one highlighted ============ */
+    function buildBars(){
+      var g=new T.Group();
+      var hs=[0.9,1.5,3.4,2.3,2.8,1.2,2.0,1.7], bars=[], i;
+      for(i=0;i<8;i++){
+        var hot=i===2, x=-3.5+i;
+        var b=new T.Mesh(new T.BoxGeometry(0.62,hs[i],0.62),new T.MeshBasicMaterial({color:hot?CYAN:WHITE,transparent:true,opacity:hot?0.4:0.2,blending:T.NormalBlending,depthWrite:false}));
+        b.position.set(x,hs[i]/2,0);
+        var e=edges(new T.BoxGeometry(0.62,hs[i],0.62),hot?CYAN:WHITE,hot?0.5:0.3);
+        e.position.set(x,hs[i]/2,0);
+        g.add(b); g.add(e);
+        bars.push({b:b,e:e});
+      }
+      var hotGlow=points(ptsGeo([-1.5,hs[2]+0.08,0]),CYAN,0.22,0.4);
+      hotGlow.visible=false;
+      g.add(hotGlow);
+      g.userData.bars=bars;
+      g.userData.grow=1;
+      g.userData.hotGlow=hotGlow;
+      g.userData.spin={y:0.06};
+      g.userData.bob=0.15;
+      g.scale.set(1.15,1.15,1.15);
+      g.userData.update=function(t){
+        if(g.userData.grow<1){
+          g.userData.grow=Math.min(1,g.userData.grow+0.02);
+          var k=1-Math.pow(1-g.userData.grow,3);
+          for(var i=0;i<8;i++){
+            var s=Math.min(1,k*1.4+i*0.04);
+            bars[i].b.scale.y=s; bars[i].e.scale.y=s;
+          }
+          if(g.userData.grow>=1) hotGlow.visible=true;
+        }
+      };
+      return g;
+    }
+
+    /* ============ 17 · Portfolio — floating 3D card panels (video-wall feel) ============ */
+    function buildPanels(){
+      var g=new T.Group();
+      var spots=[];
+      for(var i=0;i<6;i++){
+        var grp=new T.Group();
+        var border=loopPts([-1.15,-0.65,0,1.15,-0.65,0,1.15,0.65,0,-1.15,0.65,0],CYAN,0.22);
+        var fill=new T.Mesh(new T.PlaneGeometry(2.3,1.3),
+          new T.MeshBasicMaterial({color:WHITE,transparent:true,opacity:0.06,side:T.DoubleSide,blending:T.NormalBlending,depthWrite:false}));
+        grp.add(fill); grp.add(border);
+        grp.position.set(-4.6+i*1.84,(i%2===0?1.0:-0.6)+(i-2.5)*0.15,(Math.random()-0.5)*1.4);
+        grp.rotation.y=(Math.random()-0.5)*0.5;
+        grp.rotation.z=(Math.random()-0.5)*0.08;
+        g.add(grp);
+        spots.push({grp:grp,y:grp.position.y,ph:Math.random()*6.28});
+      }
+      g.userData.spots=spots;
+      g.userData.spin={y:0.08};
+      g.userData.bob=0.15;
+      g.userData.update=function(t){
+        for(var i=0;i<spots.length;i++){
+          spots[i].grp.position.y=spots[i].y+Math.sin(t*0.25+spots[i].ph)*0.22;
+        }
+      };
+      return g;
+    }
+
+    /* ============ 18 · Pitfalls — restrained glass crack / warning wireframe ============ */
+    function buildCrack(){
+      var g=new T.Group();
+      g.add(loopPts(circleXY(3.1,72),WHITE,0.14));
+      var crackPts=[];
+      var n=7;
+      for(var i=0;i<n;i++){
+        var a=i/n*Math.PI*2+(Math.random()-0.5)*0.5;
+        var px=0, py=0;
+        for(var s=0;s<6;s++){
+          var len=(s+1)/6*3.0;
+          var nx=Math.cos(a+(Math.random()-0.5)*0.9)*len;
+          var ny=Math.sin(a+(Math.random()-0.5)*0.9)*len;
+          crackPts.push(px,py,0,nx,ny,0);
+          px=nx; py=ny;
+        }
+      }
+      g.add(segs(crackPts,CORAL,0.34));
+      var shards=[];
+      for(i=0;i<6;i++){
+        var a0=i/6*Math.PI*2, r=2.0;
+        var t1=[Math.cos(a0)*r,Math.sin(a0)*r];
+        var t2=[Math.cos(a0+0.5)*r,Math.sin(a0+0.5)*r];
+        var t3=[Math.cos(a0+0.25)*r*1.2,Math.sin(a0+0.25)*r*1.2];
+        var tri=segs([t1[0],t1[1],0,t2[0],t2[1],0,t2[0],t2[1],0,t3[0],t3[1],0,t3[0],t3[1],0,t1[0],t1[1],0],CORAL,0.22);
+        g.add(tri);
+        shards.push({tri:tri,base:[t1[0],t1[1],t2[0],t2[1],t3[0],t3[1]]});
+      }
+      g.add(points(ptsGeo([0,0,0]),CORAL,0.3,0.4));
+      g.userData.shards=shards;
+      g.userData.spin={y:0.06};
+      g.userData.bob=0.1;
+      g.userData.update=function(t){
+        for(var i=0;i<shards.length;i++){
+          var d=1+0.08*Math.sin(t*0.2+i*1.1);
+          var arr=shards[i].tri.geometry.attributes.position.array;
+          var b=shards[i].base;
+          for(var k=0;k<6;k++){ arr[k]=b[k]*d; }
+          shards[i].tri.geometry.attributes.position.needsUpdate=true;
+        }
+      };
+      return g;
+    }
+
+    /* ============ 19 · Closing — faint halo rings (particle logo is the finale glow) ============ */
+    function buildPortal(){
+      var g=new T.Group();
+      var i;
+      for(i=0;i<6;i++){
+        var rg=loopPts(circleXY(4.6-i*0.66,64),i%2?CYAN:WHITE,0.08);
+        rg.position.z=-3+i*0.9;
+        g.add(rg);
+      }
+      var N=80, pos=[], col=[];
+      var cCyan=new T.Color(CYAN), cWhite=new T.Color(WHITE), tmp=new T.Color();
+      for(i=0;i<N;i++){
+        pos.push(0,0,0);
+        tmp.copy(cCyan).lerp(cWhite,(i%16)/16);
+        col.push(tmp.r,tmp.g,tmp.b);
+      }
+      var swirl=points(colAttr(ptsGeo(pos),col),CYAN,0.12,0.16);
+      g.add(swirl);
+      g.add(points(ptsGeo([0,0,0]),CYAN,0.5,0.2));
+      g.userData.swirl=swirl;
+      g.userData.spin={y:0.06};
+      g.userData.update=function(t){
+        var arr=swirl.geometry.attributes.position.array;
+        for(var i=0;i<N;i++){
+          var p=((i/N)+(t*0.018))%1;
+          var ang=i*0.85+p*Math.PI*4;
+          var r=(1-p)*4.8+0.3;
+          arr[i*3]=Math.cos(ang)*r;
+          arr[i*3+1]=Math.sin(ang)*r;
+          arr[i*3+2]=(p-0.5)*3.5;
+        }
+        swirl.geometry.attributes.position.needsUpdate=true;
+      };
+      return g;
+    }
+
+    /* ============ 20 · Finale — very faint closing halo for the thanks page ============ */
+    function buildFinale(){
+      var g=new T.Group();
+      var i;
+      for(i=0;i<4;i++){
+        var rg=loopPts(circleXY(4.4-i*0.9,60),i%2?CYAN:WHITE,0.05);
+        rg.position.z=-2+i*1.2;
+        g.add(rg);
+      }
+      var N=60,pos=[],col=[];
+      var cCyan=new T.Color(CYAN),cWhite=new T.Color(WHITE),tmp=new T.Color();
+      for(i=0;i<N;i++){
+        var a=Math.random()*Math.PI*2,r=0.8+Math.random()*4.6;
+        pos.push(Math.cos(a)*r,Math.sin(a)*r,(Math.random()-0.5)*3);
+        tmp.copy(cWhite).lerp(cCyan,Math.random());
+        col.push(tmp.r,tmp.g,tmp.b);
+      }
+      g.add(points(colAttr(ptsGeo(pos),col),CYAN,0.09,0.16));
+      g.add(points(ptsGeo([0,0,0]),CYAN,0.42,0.14));
+      g.userData.spin={y:0.05};
+      g.userData.bob=0.1;
+      g.scale.set(1.05,1.05,1.05);
+      return g;
+    }
+
+    /* ============ 21 · Brand particle logo (alpha-sampled, additive glow) ============
+       Shared by slide 1 (cover · main visual) and slide 19 (closing · finale glow).
+       Shape preserved via alpha sampling of images/logo-black.png (alpha > 60),
+       600–1500 bright particles on a camera-facing X-Y plane with slight Z depth,
+       soft-dot canvas map + AdditiveBlending, white→#36D8E8→#0a1f3d gradient by X,
+       indigo aura plane + cyan glow sprite behind, very slow drift; static under
+       prefers-reduced-motion. Geometry is built once on image load. */
+    var logoCache={ready:false,samples:null};
+    function auraTex2(){
+      var c=document.createElement('canvas'); c.width=c.height=256;
+      var x=c.getContext('2d');
+      var grd=x.createRadialGradient(128,128,8,128,128,128);
+      grd.addColorStop(0,'rgba(10,31,61,0.95)');
+      grd.addColorStop(0.35,'rgba(22,52,84,0.55)');
+      grd.addColorStop(0.72,'rgba(54,216,232,0.10)');
+      grd.addColorStop(1,'rgba(54,216,232,0)');
+      x.fillStyle=grd; x.fillRect(0,0,256,256);
+      return new T.CanvasTexture(c);
+    }
+    function buildLogoGroup(opts){
+      var g=new T.Group();
+      var aura=new T.Mesh(new T.PlaneGeometry(opts.auraW,opts.auraH),
+        new T.MeshBasicMaterial({map:auraTex2(),transparent:true,opacity:opts.auraOp||0.5,depthWrite:false,blending:T.NormalBlending}));
+      aura.position.z=-1.2;
+      g.add(aura);
+      var glow=new T.Sprite(new T.SpriteMaterial({map:glowTex(),color:CYAN,transparent:true,opacity:0.34,depthWrite:false,blending:T.AdditiveBlending}));
+      glow.scale.set(opts.glowS,opts.glowS,1);
+      glow.position.z=-0.5;
+      g.add(glow);
+      var halo=points(ptsGeo([]),CYAN,1.0,0.12,glowTex());
+      halo.material.blending=T.AdditiveBlending;
+      halo.position.z=-0.3;
+      g.add(halo);
+      var logo=points(ptsGeo([]),WHITE,opts.size,1.0,glowTex());
+      logo.material.blending=T.AdditiveBlending;
+      g.add(logo);
+      g.userData.aura=aura; g.userData.glow=glow; g.userData.halo=halo; g.userData.logo=logo;
+      g.userData.baseGlow=opts.glowS;
+      g.userData.hostSlide=opts.hostSlide;
+      g.userData.ox=opts.ox||0;
+      g.userData.update=function(t){
+        g.position.x=g.userData.ox+Math.sin(t*0.06)*0.35;
+        g.position.y=Math.sin(t*0.05+1.2)*0.25;
+        g.rotation.z=Math.sin(t*0.045)*0.05;
+        var s=g.userData.baseGlow*(1+0.09*Math.sin(t*0.55));
+        g.userData.glow.scale.set(s,s,1);
+        var as=1+0.05*Math.sin(t*0.4);
+        g.userData.aura.scale.set(as,as,1);
+      };
+      return g;
+    }
+    function sampleLogo(im){
+      var W=240;
+      var H=Math.max(1,Math.round(W*((im.naturalHeight||im.height)/(im.naturalWidth||im.width))));
+      var c=document.createElement('canvas'); c.width=W; c.height=H;
+      var x=c.getContext('2d');
+      x.drawImage(im,0,0,W,H);
+      var d=x.getImageData(0,0,W,H).data;
+      var pts=[],px,py,i;
+      for(py=0;py<H;py+=2){
+        for(px=0;px<W;px+=2){
+          if(d[(py*W+px)*4+3]>60) pts.push(px,py);
+        }
+      }
+      var n=pts.length/2;
+      if(n>1500){
+        var stride=Math.ceil(n/1200), out=[];
+        for(i=0;i<pts.length;i+=stride*2) out.push(pts[i],pts[i+1]);
+        pts=out; n=pts.length/2;
+      }else if(n<600){
+        pts=[];
+        for(py=0;py<H;py++){
+          for(px=0;px<W;px++){
+            if(d[(py*W+px)*4+3]>60) pts.push(px,py);
+          }
+        }
+        n=pts.length/2;
+        if(n>1500){
+          var s2=Math.ceil(n/1200), o2=[];
+          for(i=0;i<pts.length;i+=s2*2) o2.push(pts[i],pts[i+1]);
+          pts=o2;
+        }
+      }
+      return {pts:pts,W:W,H:H};
+    }
+    function applyLogoToGroup(g,worldH){
+      var s=logoCache.samples;
+      if(!s) return;
+      var n=s.pts.length/2;
+      if(n<8) return;
+      var worldW=worldH*(s.W/s.H);
+      var pos=[],col=[],haloPos=[],i;
+      var cWhite=new T.Color(WHITE),cCyan=new T.Color(CYAN),cInd=new T.Color(INDIGO),tmp=new T.Color();
+      for(i=0;i<n;i++){
+        var px=s.pts[i*2],py=s.pts[i*2+1];
+        var x=(px-s.W/2)/s.W*worldW;
+        var y=-(py-s.H/2)/s.H*worldH;
+        var z=0.4+Math.random()*0.8;
+        pos.push(x,y,z);
+        var t=(x/worldW)+0.5;
+        if(t<0) t=0; else if(t>1) t=1;
+        if(t<0.72){ tmp.copy(cWhite).lerp(cCyan,t/0.72); }
+        else { tmp.copy(cCyan).lerp(cInd,(t-0.72)/0.28); }
+        var b=0.85+Math.random()*0.45;
+        col.push(tmp.r*b,tmp.g*b,tmp.b*b);
+        if(i%28===0){
+          haloPos.push(x*1.14+(Math.random()-0.5)*0.5, y*1.14+(Math.random()-0.5)*0.5, -0.3);
+        }
+      }
+      var geo=ptsGeo(pos);
+      colAttr(geo,col);
+      g.userData.logo.geometry.dispose();
+      g.userData.logo.geometry=geo;
+      g.userData.logo.material.vertexColors=true;
+      g.userData.halo.geometry.dispose();
+      g.userData.halo.geometry=ptsGeo(haloPos);
+    }
+
+    /* ================= scene / renderer / camera ================= */
+    var scene=new T.Scene();
+    var camera=new T.PerspectiveCamera(50,1,0.1,100);
+    camera.position.set(0,0,14);
+    var renderer;
+    try{
+      renderer=new T.WebGLRenderer({canvas:canvas,alpha:true,antialias:true,powerPreference:'high-performance'});
+    }catch(e){ return; }
+    renderer.setClearColor(0x000000,0);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));
+
+    var builders=[buildCover,buildNeural,buildEras,buildEvolve,buildTech,buildFluid,buildChain,buildEmotion,buildGeo,buildSteps,buildFunnel,buildRadar,buildMatrix,buildSafety,buildTiles,buildBars,buildPanels,buildCrack,buildPortal,buildFinale];
+    var groups=builders.map(function(fn){
+      var g=fn();
+      g.userData.fade=0; g.userData.fadeT=0;
+      g.userData.emer=0; g.userData.baseScale=g.scale.clone();
+      scene.add(g);
+      return g;
+    });
+
+    /* -- brand particle logo: own groups (not inside the 20 motifs) so it can sit on
+          top of the cover/closing scenes; fades with its host slide -- */
+    var logoCover=buildLogoGroup({hostSlide:0,auraW:9.0,auraH:9.6,glowS:6.0,size:0.18,auraOp:0.5,ox:0});
+    var logoClose=buildLogoGroup({hostSlide:18,auraW:5.6,auraH:6.0,glowS:3.8,size:0.15,auraOp:0.48,ox:7.2});
+    var logoGroups=[logoCover,logoClose];
+    scene.add(logoCover); scene.add(logoClose);
+
+    function findActive(){ for(var i=0;i<slides.length;i++){ if(slides[i].classList.contains('active')) return i; } return 0; }
+
+    var current=-1;
+    function setActive(i){
+      if(i===current) return;
+      current=i;
+      if(i===0){ canvas.style.top='0'; canvas.style.left=''; canvas.style.right='0'; canvas.style.width='50vw'; canvas.style.height='100%'; }
+      else { canvas.style.top='0'; canvas.style.left='0'; canvas.style.right=''; canvas.style.width='100%'; canvas.style.height='100%'; }
+      slides[i].appendChild(canvas);
+      resize();
+      for(var j=0;j<groups.length;j++){
+        var g=groups[j];
+        g.userData.fadeT=(j===i?1:0);
+        g.visible=true;
+        if(j===i){
+          if(RM){ g.userData.fade=1; g.userData.emer=1; }
+          else {
+            g.userData.fade=Math.max(g.userData.fade,0.001);
+            g.userData.emer=0;                        /* one-time growth on every entry */
+            if(g.userData.spread!==undefined) g.userData.spread=0;
+            if(g.userData.grow!==undefined) g.userData.grow=0;
+          }
+        } else { g.userData.emer=1; }
+      }
+      for(var k=0;k<logoGroups.length;k++){
+        var lg=logoGroups[k];
+        lg.userData.fadeT=(lg.userData.hostSlide===i?1:0);
+        lg.visible=true;
+        if(RM){ lg.userData.fade=lg.userData.fadeT; }
+        else { lg.userData.fade=Math.max(lg.userData.fade,0.001); }
+      }
+      if(RM) renderOnce();
+    }
+
+    function resize(){
+      var r=canvas.getBoundingClientRect();
+      var w=Math.max(1,r.width), h=Math.max(1,r.height);
+      renderer.setSize(w,h,false);
+      camera.aspect=w/h;
+      camera.updateProjectionMatrix();
+      if(RM) renderOnce();
+    }
+
+    function applyFade(g){
+      var f=g.userData.fade;
+      g.traverse(function(o){
+        if(o.material){
+          var b=o.userData.baseOp;
+          if(b===undefined){ b=o.material.opacity; o.userData.baseOp=b; }
+          o.material.opacity=b*f;
+        }
+      });
+    }
+
+    function updateScene(g,t,dt){
+      var ud=g.userData;
+      var sp=ud.spin||ZERO_V, tl=ud.tilt||ZERO_V;
+      g.rotation.x=tl.x+t*sp.x;
+      g.rotation.y=tl.y+t*sp.y;
+      g.rotation.z=tl.z+t*sp.z;
+      if(ud.bob) g.position.y=Math.sin(t*0.22+(ud.phase||0))*ud.bob;
+      if(ud.update) ud.update(t,dt);
+    }
+
+    /* one-time growth on entry (~0.8s ease-out), then scale rests at base — static under RM */
+    function emergeGroup(g,dt){
+      var ud=g.userData, base=ud.baseScale;
+      if(!base) return;
+      if(RM){ if(!ud._sRestored){ ud._sRestored=true; g.scale.copy(base); } return; }
+      if(ud.emer===undefined) ud.emer=(ud.fadeT===1?1:0);
+      if(ud.emer<1){
+        ud.emer=Math.min(1,ud.emer+dt/0.8);
+        var k=1-Math.pow(1-ud.emer,3);
+        var s=0.9+0.1*k;
+        g.scale.set(base.x*s,base.y*s,base.z*s);
+        ud._sRestored=false;
+      } else if(!ud._sRestored){
+        ud._sRestored=true;
+        g.scale.copy(base);
+      }
+    }
+    function stepGroup(g,dt){
+      var f=g.userData.fade, ft=g.userData.fadeT;
+      if(ft===1&&f<1) f=Math.min(1,f+dt*1.6);
+      else if(ft===0&&f>0) f=Math.max(0,f-dt*2.4);
+      g.userData.fade=f;
+      if(f<0.01&&ft===0){ g.visible=false; return; }
+      if(f>0.01) g.visible=true;
+      applyFade(g);
+      emergeGroup(g,dt);
+      updateScene(g,t,dt);
+    }
+
+    var t=0,last=Date.now(),raf=null,mx=0,my=0,tmx=0,tmy=0;
+    function loop(){
+      raf=requestAnimationFrame(loop);
+      var now=Date.now();
+      var dt=Math.min(0.05,(now-last)/1000); last=now;
+      t+=dt;
+      mx+=(tmx-mx)*0.05; my+=(tmy-my)*0.05;
+      for(var i=0;i<groups.length;i++) stepGroup(groups[i],dt);
+      for(var i=0;i<logoGroups.length;i++) stepGroup(logoGroups[i],dt);
+      camera.position.x=mx*1.1;
+      camera.position.y=my*0.7;
+      camera.lookAt(0,0,0);
+      renderer.render(scene,camera);
+    }
+
+    function renderOnce(){
+      t=2.0;
+      for(var i=0;i<groups.length;i++){
+        var g=groups[i];
+        g.userData.fade=g.userData.fadeT;
+        g.visible=g.userData.fadeT>0.5;
+        if(g.visible){ applyFade(g); updateScene(g,t,0.016); }
+      }
+      for(var i=0;i<logoGroups.length;i++){
+        var g=logoGroups[i];
+        g.userData.fade=g.userData.fadeT;
+        g.visible=g.userData.fadeT>0.5;
+        if(g.visible){ applyFade(g); updateScene(g,t,0.016); }
+      }
+      for(var i=0;i<groups.length;i++){
+        var g=groups[i], bs=g.userData.baseScale;
+        if(bs){ g.scale.copy(bs); g.userData.emer=1; g.userData._sRestored=true; }
+      }
+      camera.position.set(0,0,14);
+      camera.lookAt(0,0,0);
+      renderer.render(scene,camera);
+    }
+
+    function paused(){ return document.hidden||overviewOpen()||RM; }
+    function startLoop(){ if(raf!==null) return; last=Date.now(); raf=requestAnimationFrame(loop); }
+    function stopLoop(){ if(raf!==null){ cancelAnimationFrame(raf); raf=null; } }
+    function sync(){ if(paused()) stopLoop(); else startLoop(); }
+
+    /* ---------- wiring ---------- */
+    document.addEventListener('visibilitychange',sync);
+    if(overview){ new MutationObserver(sync).observe(overview,{attributes:true,attributeFilter:['style']}); }
+    var mq=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)');
+    if(mq&&mq.addEventListener){
+      mq.addEventListener('change',function(){ RM=mq.matches; if(RM){ stopLoop(); renderOnce(); } else startLoop(); });
+    }
+    addEventListener('resize',function(){ resize(); });
+    addEventListener('mousemove',function(e){ tmx=(e.clientX/innerWidth)*2-1; tmy=(e.clientY/innerHeight)*2-1; },{passive:true});
+
+    var obs=new MutationObserver(function(muts){
+      for(var i=0;i<muts.length;i++){
+        var m=muts[i];
+        if(m.type==='attributes'&&m.target.classList&&m.target.classList.contains('slide')){
+          var a=findActive();
+          if(a!==current) setActive(a);
+          return;
+        }
+      }
+    });
+    obs.observe(deck,{subtree:true,attributes:true,attributeFilter:['class']});
+
+    /* -- load the brand mark async, then fill the shared particle geometries once -- */
+    var LOGO_DATA='data:image/png;base64,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'; /* downscaled 240x256 copy of images/logo-black.png - data URI keeps alpha sampling origin-clean even under file:// */
+    (function loadLogo(){
+      var im=new Image();
+      im.onload=function(){
+        try{
+          var s=sampleLogo(im);
+          if(s && s.pts.length>=8){ logoCache.samples=s; logoCache.ready=true; }
+        }catch(e){ logoCache.ready=false; }
+        if(logoCache.ready){
+          applyLogoToGroup(logoCover,6.5);
+          applyLogoToGroup(logoClose,3.6);
+          if(RM) renderOnce();
+        }
+      };
+      im.onerror=function(){ logoCache.ready=false; };
+      im.src=LOGO_DATA;
+    })();
+
+    setActive(findActive());
+    if(RM) renderOnce(); else startLoop();
+  }
+})();
+</script>
+</body>
+</html>
